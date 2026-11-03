@@ -1,0 +1,12 @@
+证监会每日审批爬虫
+
+WorkBuddy 默认流程：对话里选「今日/昨日」+「要不要对标」，再跑无界面 CLI。
+不要默认弹 Tk 窗口；长区间和 ETF 全历史都会很慢。
+
+快速命令：
+  /usr/local/bin/python3 run_cli.py --date today
+  /usr/local/bin/python3 run_cli.py --date yesterday --bench-common
+  /usr/local/bin/python3 run_cli.py --list-bench
+
+只要 GUI 时：
+  /usr/local/bin/python3 csrc_scraper_gui.py
