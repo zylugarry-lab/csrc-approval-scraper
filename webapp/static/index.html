@@ -3,218 +3,358 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>证监会行政许可审批进度爬虫</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <title>证监会每日审批爬虫</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #f6f7fb;
-      --card: #fff;
-      --ink: #1a2332;
-      --muted: #667085;
-      --line: #e4e7ec;
+      --ink: #081628;
+      --navy: #102a43;
       --blue: #1a73e8;
-      --blue-deep: #0f4c9a;
-      --ok: #1f7a4d;
+      --blue-2: #0b57d0;
+      --mist: #edf3f9;
+      --line: rgba(16, 42, 67, 0.10);
+      --muted: #5b6e82;
+      --ok: #0f7a4a;
+      --warn: #9a6700;
       --danger: #b42318;
+      --card: rgba(255,255,255,0.86);
+      --shadow: 0 24px 60px rgba(8, 22, 40, 0.12);
     }
     * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
     body {
-      margin: 0;
       font-family: "Noto Sans SC", "PingFang SC", sans-serif;
-      background: var(--bg);
       color: var(--ink);
-      min-height: 100vh;
+      background:
+        radial-gradient(900px 520px at 8% -8%, #cfe0f8 0%, transparent 55%),
+        radial-gradient(800px 480px at 100% 0%, #d9ebe4 0%, transparent 48%),
+        linear-gradient(165deg, #e8eef6 0%, #f4f7fb 42%, #e9eef5 100%);
     }
-    .shell { width: min(980px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 48px; }
-    h1 {
-      margin: 0 0 6px;
-      text-align: center;
-      color: var(--blue);
-      font-size: 26px;
-      font-weight: 900;
+    .bg-grid {
+      position: fixed; inset: 0; pointer-events: none; opacity: 0.35;
+      background-image:
+        linear-gradient(rgba(16,42,67,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(16,42,67,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
     }
-    .sub {
-      text-align: center;
-      color: var(--muted);
-      font-size: 13px;
+    .page {
+      position: relative;
+      width: min(1040px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 56px;
+    }
+
+    /* Hero */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 28px;
+      align-items: end;
       margin-bottom: 22px;
-      word-break: break-all;
     }
-    .card {
+    @media (max-width: 840px) {
+      .hero { grid-template-columns: 1fr; gap: 16px; }
+    }
+    .brand {
+      font-family: "Instrument Sans", "Noto Sans SC", sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      font-size: 13px;
+      color: var(--blue-2);
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 4.2vw, 42px);
+      line-height: 1.15;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      max-width: 12em;
+    }
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 34em;
+    }
+    .hero-side {
+      background: linear-gradient(145deg, #102a43 0%, #1a4a7a 55%, #1a73e8 120%);
+      color: #fff;
+      border-radius: 20px;
+      padding: 20px 22px;
+      box-shadow: var(--shadow);
+      min-height: 132px;
+    }
+    .hero-side .kicker { font-size: 12px; opacity: 0.75; margin-bottom: 8px; }
+    .hero-side .big { font-size: 22px; font-weight: 800; line-height: 1.35; }
+    .hero-side .small { margin-top: 10px; font-size: 12px; opacity: 0.72; }
+
+    /* Panels */
+    .panel {
       background: var(--card);
+      backdrop-filter: blur(14px);
       border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 18px 18px 14px;
-      margin-bottom: 14px;
-      box-shadow: 0 8px 28px rgba(26, 35, 50, 0.05);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      animation: rise .45s ease both;
     }
-    .card h2 {
-      margin: 0 0 14px;
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .panel h2 {
+      margin: 0 0 16px;
       font-size: 15px;
       font-weight: 800;
-      color: #344054;
-    }
-    .row {
+      color: var(--navy);
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      gap: 10px 14px;
-      margin-bottom: 12px;
+      gap: 8px;
+    }
+    .panel h2::before {
+      content: "";
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--blue);
+      box-shadow: 0 0 0 4px rgba(26,115,232,0.15);
+    }
+
+    .field {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 640px) {
+      .field { grid-template-columns: 1fr; gap: 6px; }
     }
     .label {
-      width: 88px;
+      padding-top: 10px;
       text-align: right;
-      color: #475467;
       font-size: 13px;
-      font-weight: 600;
-      flex: 0 0 88px;
+      font-weight: 700;
+      color: #40566d;
     }
-    select, input[type="date"], input[type="text"], input[type="search"] {
-      border: 1px solid #d0d5dd;
-      border-radius: 8px;
-      padding: 8px 10px;
+    @media (max-width: 640px) { .label { text-align: left; padding-top: 0; } }
+
+    select, input[type="date"], input[type="search"] {
+      width: 100%;
+      max-width: 280px;
+      border: 1px solid #cfd8e3;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
       font-size: 13px;
-      font-family: inherit;
       background: #fff;
+      transition: border-color .15s, box-shadow .15s;
     }
-    .hint { color: #98a2b3; font-size: 12px; }
-    .radios, .checks { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
-    .radios label, .checks label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 4px rgba(26,115,232,0.12);
+    }
+    .chips {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid #d5deea;
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
       font-size: 13px;
       cursor: pointer;
+      user-select: none;
+      transition: all .15s ease;
     }
-    .bench-box {
-      border: 1px solid var(--line);
+    .chip:hover { border-color: #9db7de; }
+    .chip input { accent-color: var(--blue); }
+    .chip.active {
+      background: #eaf2ff;
+      border-color: #8eb6ef;
+      color: var(--blue-2);
+      font-weight: 700;
+    }
+    .hint { color: #8a9bb0; font-size: 12px; margin-top: 6px; }
+
+    .bench-toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+    }
+    .bench-toolbar input[type="search"] { max-width: none; flex: 1; min-width: 160px; }
+    .mini-btn {
+      border: 1px solid #d5deea;
+      background: #fff;
       border-radius: 10px;
-      background: #fafafa;
-      max-height: 180px;
+      padding: 9px 12px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: #f8fafc; }
+    .bench-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fbfcfe, #f5f8fb);
+      max-height: 210px;
       overflow: auto;
-      padding: 10px 12px;
-      width: 100%;
+      padding: 12px;
     }
     .bench-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 6px 10px;
+      grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+      gap: 6px 8px;
     }
-    .actions { display: flex; gap: 10px; align-items: center; margin: 8px 0 12px; }
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 12px 22px;
-      font-size: 14px;
-      font-weight: 800;
-      font-family: inherit;
-      cursor: pointer;
+    .bench-grid label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; cursor: pointer;
+      padding: 4px 6px; border-radius: 8px;
     }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .bench-grid label:hover { background: rgba(26,115,232,0.06); }
+
+    .actions {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+      margin: 4px 0 16px;
+    }
     .btn-run {
-      background: linear-gradient(135deg, #1a73e8, #0f4c9a);
+      border: none;
+      border-radius: 14px;
+      padding: 14px 26px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
       color: #fff;
-      box-shadow: 0 8px 20px rgba(26,115,232,.28);
+      cursor: pointer;
+      background: linear-gradient(135deg, #1a73e8 0%, #0b57d0 100%);
+      box-shadow: 0 14px 30px rgba(26,115,232,0.28);
+      transition: transform .15s ease, box-shadow .15s ease;
     }
-    .btn-ghost {
-      background: #fff;
-      border: 1px solid var(--line);
-      color: #344054;
-    }
+    .btn-run:hover { transform: translateY(-1px); box-shadow: 0 18px 34px rgba(26,115,232,0.34); }
+    .btn-run:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
     .status {
-      font-size: 13px;
-      color: var(--muted);
+      font-size: 13px; color: var(--muted); font-weight: 600;
     }
-    .status.ok { color: var(--ok); font-weight: 700; }
-    .status.err { color: var(--danger); font-weight: 700; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+    .status.run { color: var(--blue-2); }
+
     .log {
-      width: 100%;
-      min-height: 160px;
-      max-height: 280px;
-      overflow: auto;
-      background: #fafafa;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-family: ui-monospace, Menlo, Consolas, monospace;
+      min-height: 150px; max-height: 260px; overflow: auto;
+      border-radius: 14px;
+      background: #0b1f33;
+      color: #d7e8ff;
+      padding: 14px 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12px;
       line-height: 1.55;
       white-space: pre-wrap;
-      color: #333;
     }
     .hidden { display: none !important; }
+    footer {
+      margin-top: 8px;
+      text-align: center;
+      color: #8a9bb0;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <h1>中国证监会行政许可审批进度爬虫</h1>
-    <p class="sub">网页版 · 勾选参数后直接抓取并下载 Excel</p>
+  <div class="bg-grid"></div>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <div class="brand">CSRC APPROVAL TRACKER</div>
+        <h1>证监会每日审批爬虫</h1>
+        <p class="lead">勾选日期与对标机构，一键从公开接口导出多 Sheet Excel。数据与官网「审批进度公示」一致，适合日常盯盘与业务汇报。</p>
+      </div>
+      <aside class="hero-side">
+        <div class="kicker">网页版操作台</div>
+        <div class="big">选日期 · 勾机构 · 下载台账</div>
+        <div class="small" id="heroMeta">加载机构名单中…</div>
+      </aside>
+    </header>
 
-    <div class="card">
+    <section class="panel">
       <h2>爬取配置</h2>
 
-      <div class="row">
+      <div class="field">
         <div class="label">基金类型</div>
-        <select id="fundType"></select>
-        <span class="hint">（可选，只导出指定类型需本地 GUI；网页版先按全部导出）</span>
+        <div>
+          <select id="fundType"></select>
+          <div class="hint">当前网页版按全部类型导出主台账（筛选可后续加强）</div>
+        </div>
       </div>
 
-      <div class="row">
+      <div class="field">
         <div class="label">日期类型</div>
-        <div class="radios" id="dateType">
-          <label><input type="radio" name="dtype" value="today" checked /> 今日</label>
-          <label><input type="radio" name="dtype" value="yesterday" /> 昨日</label>
-          <label><input type="radio" name="dtype" value="single" /> 单日</label>
-          <label><input type="radio" name="dtype" value="range" /> 日期范围</label>
+        <div>
+          <div class="chips" id="dateType">
+            <label class="chip active"><input type="radio" name="dtype" value="today" checked /> 今日</label>
+            <label class="chip"><input type="radio" name="dtype" value="yesterday" /> 昨日</label>
+            <label class="chip"><input type="radio" name="dtype" value="single" /> 单日</label>
+            <label class="chip"><input type="radio" name="dtype" value="range" /> 日期范围</label>
+          </div>
         </div>
       </div>
 
-      <div class="row hidden" id="rowSingle">
+      <div class="field hidden" id="rowSingle">
         <div class="label">目标日期</div>
-        <input type="date" id="singleDate" />
+        <div><input type="date" id="singleDate" /></div>
       </div>
 
-      <div class="row hidden" id="rowRange">
+      <div class="field hidden" id="rowRange">
         <div class="label">起止日期</div>
-        <input type="date" id="startDate" />
-        <span>至</span>
-        <input type="date" id="endDate" />
-        <span class="hint">长区间会较慢</span>
-      </div>
-
-      <div class="row">
-        <div class="label">对标机构</div>
-        <div style="flex:1; min-width:240px">
-          <div class="row" style="margin:0 0 8px">
-            <input type="search" id="benchSearch" placeholder="搜索机构…" style="flex:1" />
-            <button type="button" class="btn-ghost" id="btnCommon" style="padding:8px 12px">常用对标</button>
-            <button type="button" class="btn-ghost" id="btnClear" style="padding:8px 12px">清空</button>
-          </div>
-          <div class="bench-box">
-            <div class="bench-grid" id="benchList"></div>
-          </div>
-          <p class="hint" style="margin:8px 0 0">勾选后会额外生成「对标同业」Excel；对标时间与主区间一致。</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <input type="date" id="startDate" />
+          <span style="color:#8a9bb0">至</span>
+          <input type="date" id="endDate" />
+          <span class="hint">长区间会较慢，建议今日/昨日</span>
         </div>
       </div>
 
-      <div class="row">
-        <div class="label">高级</div>
-        <label><input type="checkbox" id="etfFull" /> ETF 新主题抓全历史（很慢，一般不要勾）</label>
+      <div class="field">
+        <div class="label">对标机构</div>
+        <div>
+          <div class="bench-toolbar">
+            <input type="search" id="benchSearch" placeholder="搜索机构，例如：易方达" />
+            <button type="button" class="mini-btn" id="btnCommon">常用对标</button>
+            <button type="button" class="mini-btn" id="btnClear">清空</button>
+          </div>
+          <div class="bench-box"><div class="bench-grid" id="benchList"></div></div>
+          <div class="hint">勾选后额外生成「对标同业」Excel；对标区间与主区间一致</div>
+        </div>
       </div>
-    </div>
+
+      <div class="field">
+        <div class="label">高级</div>
+        <div>
+          <label class="chip" id="etfChip"><input type="checkbox" id="etfFull" /> ETF 新主题抓全历史（很慢）</label>
+        </div>
+      </div>
+    </section>
 
     <div class="actions">
-      <button class="btn-run" id="btnRun">开始爬取</button>
+      <button class="btn-run" id="btnRun">开始爬取并下载</button>
       <span class="status" id="status">就绪</span>
     </div>
 
-    <div class="card">
+    <section class="panel">
       <h2>运行日志</h2>
       <div class="log" id="log">等待开始…</div>
-    </div>
+    </section>
+
+    <footer>公开网页版 · 数据来源 neris.csrc.gov.cn 行政许可审批进度公示</footer>
   </div>
 
   <script>
+    const API_BASE = window.CSRC_API_BASE || "";
     const logEl = document.getElementById("log");
     const statusEl = document.getElementById("status");
     let allInstitutions = [];
@@ -222,7 +362,8 @@
 
     function log(msg) {
       const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
-      logEl.textContent += `\n[${t}] ${msg}`;
+      if (logEl.textContent === "等待开始…") logEl.textContent = "";
+      logEl.textContent += `[${t}] ${msg}\n`;
       logEl.scrollTop = logEl.scrollHeight;
     }
 
@@ -234,20 +375,21 @@
       const v = selectedDateType();
       document.getElementById("rowSingle").classList.toggle("hidden", v !== "single");
       document.getElementById("rowRange").classList.toggle("hidden", v !== "range");
+      document.querySelectorAll("#dateType .chip").forEach((chip) => {
+        const input = chip.querySelector("input");
+        chip.classList.toggle("active", input && input.checked);
+      });
     }
 
     function renderBench(filter = "") {
       const q = filter.trim();
       const box = document.getElementById("benchList");
       box.innerHTML = "";
-      allInstitutions
-        .filter((n) => !q || n.includes(q))
-        .forEach((name) => {
-          const id = "b_" + name;
-          const lab = document.createElement("label");
-          lab.innerHTML = `<input type="checkbox" value="${name}" id="${id}" /> ${name}`;
-          box.appendChild(lab);
-        });
+      allInstitutions.filter((n) => !q || n.includes(q)).forEach((name) => {
+        const lab = document.createElement("label");
+        lab.innerHTML = `<input type="checkbox" value="${name}" /> ${name}`;
+        box.appendChild(lab);
+      });
     }
 
     function selectedBenches() {
@@ -255,38 +397,45 @@
     }
 
     async function init() {
-      const meta = await fetch("/api/meta").then((r) => r.json());
+      const meta = await fetch(API_BASE + "/api/meta").then((r) => {
+        if (!r.ok) throw new Error("接口不可用");
+        return r.json();
+      });
       allInstitutions = meta.institutions || [];
       commonBenchmarks = meta.common_benchmarks || [];
       const ft = document.getElementById("fundType");
       (meta.fund_types || ["全部"]).forEach((x) => {
         const o = document.createElement("option");
-        o.value = x; o.textContent = x;
-        ft.appendChild(o);
+        o.value = x; o.textContent = x; ft.appendChild(o);
       });
-      document.getElementById("singleDate").value = meta.today;
-      document.getElementById("startDate").value = meta.today;
-      document.getElementById("endDate").value = meta.today;
+      ["singleDate", "startDate", "endDate"].forEach((id) => {
+        document.getElementById(id).value = meta.today;
+      });
+      document.getElementById("heroMeta").textContent =
+        `已加载 ${allInstitutions.length} 家对标机构 · 今日 ${meta.today}`;
       renderBench();
-      log("已加载对标机构 " + allInstitutions.length + " 家");
+      log("服务已连接，可以开始勾选并爬取。");
     }
 
     document.getElementById("dateType").addEventListener("change", syncDateRows);
     document.getElementById("benchSearch").addEventListener("input", (e) => renderBench(e.target.value));
-    document.getElementById("btnClear").addEventListener("click", () => {
+    document.getElementById("btnClear").onclick = () => {
       document.querySelectorAll("#benchList input").forEach((x) => (x.checked = false));
-    });
-    document.getElementById("btnCommon").addEventListener("click", () => {
+    };
+    document.getElementById("btnCommon").onclick = () => {
       document.querySelectorAll("#benchList input").forEach((x) => {
         x.checked = commonBenchmarks.includes(x.value);
       });
       log("已勾选常用对标：" + commonBenchmarks.join("、"));
+    };
+    document.getElementById("etfFull").addEventListener("change", (e) => {
+      document.getElementById("etfChip").classList.toggle("active", e.target.checked);
     });
 
-    document.getElementById("btnRun").addEventListener("click", async () => {
+    document.getElementById("btnRun").onclick = async () => {
       const btn = document.getElementById("btnRun");
       btn.disabled = true;
-      statusEl.className = "status";
+      statusEl.className = "status run";
       statusEl.textContent = "正在爬取…";
       logEl.textContent = "";
       const body = {
@@ -298,10 +447,9 @@
         benchmarks: selectedBenches(),
         etf_full_history: document.getElementById("etfFull").checked,
       };
-      log("参数：" + JSON.stringify(body));
-      log("开始请求服务器抓取（请稍候）…");
+      log("提交参数 " + JSON.stringify(body));
       try {
-        const resp = await fetch("/api/scrape", {
+        const resp = await fetch(API_BASE + "/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -318,15 +466,12 @@
         if (m) filename = decodeURIComponent(m[1]);
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
         statusEl.className = "status ok";
         statusEl.textContent = "完成，已开始下载";
-        log("完成：已触发下载 " + filename);
+        log("完成：已下载 " + filename);
       } catch (e) {
         statusEl.className = "status err";
         statusEl.textContent = "失败";
@@ -334,10 +479,14 @@
       } finally {
         btn.disabled = false;
       }
-    });
+    };
 
     syncDateRows();
-    init().catch((e) => log("初始化失败：" + e));
+    init().catch((e) => {
+      statusEl.className = "status err";
+      statusEl.textContent = "服务未连接";
+      log("初始化失败：" + e + "。请确认后端已启动。");
+    });
   </script>
 </body>
 </html>
