@@ -4,83 +4,70 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>证监会每日审批爬虫</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=DM+Sans:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --ink: #0b1f33; --navy: #143552; --blue: #1a73e8; --blue-deep: #0f4c9a;
-      --paper: #f3f6f9; --line: #d7e0ea; --muted: #5b6b7c; --card: #fff;
-      --shadow: 0 18px 50px rgba(11, 31, 51, 0.10);
+      --ink:#081628; --blue:#1a73e8; --blue-2:#0b57d0; --muted:#5b6e82;
+      --line:rgba(16,42,67,.1); --card:rgba(255,255,255,.9);
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Noto Sans SC", "PingFang SC", sans-serif;
-      color: var(--ink);
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; font-family:"Noto Sans SC","PingFang SC",sans-serif; color:var(--ink);
       background:
-        radial-gradient(1200px 600px at 10% -10%, #d9e8ff 0%, transparent 55%),
-        linear-gradient(180deg, #eef3f8 0%, var(--paper) 45%, #e9eef4 100%);
-      min-height: 100vh;
+        radial-gradient(900px 520px at 10% -10%, #cfe0f8 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, #d7ebe3 0%, transparent 50%),
+        linear-gradient(165deg,#e8eef6,#f5f8fc 45%,#e9eef5);
     }
-    .wrap { width: min(920px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 48px; }
-    .brand { font-family: "DM Sans", sans-serif; font-weight: 700; color: var(--blue-deep); margin-bottom: 14px; }
-    h1 { font-size: clamp(32px, 5vw, 48px); margin: 0 0 14px; font-weight: 900; letter-spacing: -0.02em; }
-    .lead { font-size: 17px; line-height: 1.7; color: var(--muted); max-width: 38em; margin: 0 0 28px; }
-    .card {
-      background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-      padding: 22px; box-shadow: var(--shadow); margin-bottom: 16px;
+    .wrap{width:min(920px,calc(100% - 36px));margin:0 auto;padding:64px 0 48px}
+    .brand{font-family:"Instrument Sans",sans-serif;font-weight:700;letter-spacing:.04em;color:var(--blue-2);font-size:13px;margin-bottom:12px}
+    h1{margin:0 0 14px;font-size:clamp(34px,5vw,50px);line-height:1.12;font-weight:900;letter-spacing:-.03em}
+    .lead{margin:0 0 28px;max-width:36em;color:var(--muted);font-size:17px;line-height:1.7}
+    .cta{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:28px}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
+      border-radius:14px;padding:14px 22px;font-weight:800;font-size:15px;
     }
-    .card h2 { margin: 0 0 10px; font-size: 18px; }
-    .card p, .card li { color: var(--muted); line-height: 1.7; font-size: 14px; }
-    code { background: #eef3f8; padding: 2px 6px; border-radius: 5px; font-size: 0.92em; }
-    pre {
-      background: #0b1f33; color: #d7e8ff; border-radius: 12px; padding: 14px 16px;
-      overflow-x: auto; font-size: 13px; line-height: 1.55;
-    }
-    .note {
-      background: #fff8e8; border: 1px solid #f0dfb0; color: #6b5400;
-      border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.65;
-    }
+    .btn-primary{background:linear-gradient(135deg,#1a73e8,#0b57d0);color:#fff;box-shadow:0 14px 30px rgba(26,115,232,.28)}
+    .btn-ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 18px 50px rgba(8,22,40,.08);margin-bottom:14px}
+    .card h2{margin:0 0 10px;font-size:18px}
+    .card p,.card li{color:var(--muted);line-height:1.7;font-size:14px}
+    .note{background:#fff8e6;border:1px solid #f0dfb0;color:#6b5400;border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.65;margin-bottom:16px}
+    code{background:#eef3f8;padding:2px 6px;border-radius:5px}
+    pre{background:#0b1f33;color:#d7e8ff;border-radius:12px;padding:14px 16px;overflow:auto;font-size:13px;line-height:1.55}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="brand">CSRC · Web GUI</div>
-    <h1>证监会每日审批爬虫<br />网页版操作台</h1>
-    <p class="lead">
-      同事在浏览器里勾选日期、对标机构，点「开始爬取」即可下载 Excel——交互和桌面 GUI 一样。
-      GitHub Pages 只能放说明页；真正可勾选操作的网页版需要跑下面的服务（服务器代为请求证监会接口）。
-    </p>
+    <div class="brand">CSRC APPROVAL TRACKER</div>
+    <h1>证监会每日审批爬虫</h1>
+    <p class="lead">网页版操作台：勾选日期与对标机构，一键导出 Excel。界面已重新设计，可公开分享给同事使用。</p>
 
-    <div class="note">
-      <strong>为什么不能整站静态托管？</strong>
-      浏览器直接访问证监会接口会被跨域拦截。网页版必须有一台能上网的机器跑后端（本机 / 内网服务器均可）。
+    <div class="cta">
+      <a class="btn btn-primary" id="liveLink" href="https://clean-boxes-own.loca.lt/" target="_blank" rel="noopener">打开网页版操作台</a>
+      <a class="btn btn-ghost" href="https://github.com/zylugarry-lab/csrc-approval-scraper" target="_blank" rel="noopener">GitHub 源码</a>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <h2>启动网页版 GUI（本机或服务器）</h2>
-      <pre>cd webapp
-pip3 install -r requirements.txt
-python3 app.py
-
-# 浏览器打开
-http://127.0.0.1:8787</pre>
-      <p>同一局域网同事可访问：<code>http://&lt;你的电脑局域网IP&gt;:8787</code></p>
+    <div class="note">
+      <strong>当前公开地址</strong>依赖本机服务在线（临时隧道）。若打不开，请让部署人保持电脑运行，或按下方 Render 做成 7×24 常驻站点。
+      第一次打开 loca.lt 若出现提示页，点 Continue 即可。
     </div>
 
     <div class="card">
-      <h2>页面上能勾选什么</h2>
+      <h2>页面能做什么</h2>
       <ul>
-        <li>日期：今日 / 昨日 / 单日 / 日期范围</li>
-        <li>对标机构：搜索、常用对标一键勾选、多选</li>
-        <li>可选：ETF 新主题全历史（默认不勾，更快）</li>
-        <li>点「开始爬取」→ 自动下载 Excel（有对标时为 zip）</li>
+        <li>今日 / 昨日 / 单日 / 日期范围</li>
+        <li>搜索并勾选对标机构，或一键「常用对标」</li>
+        <li>开始爬取后自动下载 Excel（有对标时为 zip）</li>
       </ul>
     </div>
 
     <div class="card">
-      <h2>源码位置</h2>
-      <p>仓库内 <code>webapp/</code>：FastAPI + 原爬虫逻辑。<br />
-      GitHub：<a href="https://github.com/zylugarry-lab/csrc-approval-scraper">zylugarry-lab/csrc-approval-scraper</a></p>
+      <h2>做成长期公开站（推荐 Render）</h2>
+      <p>仓库已含 <code>render.yaml</code>。用 GitHub 账号登录 <a href="https://render.com" target="_blank" rel="noopener">Render</a> → New → Blueprint → 选本仓库，即可得到固定域名，同事收藏即可。</p>
+      <pre>仓库：https://github.com/zylugarry-lab/csrc-approval-scraper
+网页入口目录：webapp/
+本地预览：cd webapp && python3 app.py</pre>
     </div>
   </div>
 </body>
