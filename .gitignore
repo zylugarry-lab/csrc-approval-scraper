@@ -6,3 +6,4 @@ skill/输出/*
 !skill/输出/.gitkeep
 skill/prefs.json
 skill/_user_meta.json
+webapp/output/

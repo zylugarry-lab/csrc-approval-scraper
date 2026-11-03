@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>证监会行政许可审批进度爬虫</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #fff;
+      --ink: #1a2332;
+      --muted: #667085;
+      --line: #e4e7ec;
+      --blue: #1a73e8;
+      --blue-deep: #0f4c9a;
+      --ok: #1f7a4d;
+      --danger: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    .shell { width: min(980px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 48px; }
+    h1 {
+      margin: 0 0 6px;
+      text-align: center;
+      color: var(--blue);
+      font-size: 26px;
+      font-weight: 900;
+    }
+    .sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 22px;
+      word-break: break-all;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 28px rgba(26, 35, 50, 0.05);
+    }
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      font-weight: 800;
+      color: #344054;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-bottom: 12px;
+    }
+    .label {
+      width: 88px;
+      text-align: right;
+      color: #475467;
+      font-size: 13px;
+      font-weight: 600;
+      flex: 0 0 88px;
+    }
+    select, input[type="date"], input[type="text"], input[type="search"] {
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .hint { color: #98a2b3; font-size: 12px; }
+    .radios, .checks { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+    .radios label, .checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .bench-box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fafafa;
+      max-height: 180px;
+      overflow: auto;
+      padding: 10px 12px;
+      width: 100%;
+    }
+    .bench-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 6px 10px;
+    }
+    .actions { display: flex; gap: 10px; align-items: center; margin: 8px 0 12px; }
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 12px 22px;
+      font-size: 14px;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-run {
+      background: linear-gradient(135deg, #1a73e8, #0f4c9a);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(26,115,232,.28);
+    }
+    .btn-ghost {
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #344054;
+    }
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .status.ok { color: var(--ok); font-weight: 700; }
+    .status.err { color: var(--danger); font-weight: 700; }
+    .log {
+      width: 100%;
+      min-height: 160px;
+      max-height: 280px;
+      overflow: auto;
+      background: #fafafa;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      color: #333;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1>中国证监会行政许可审批进度爬虫</h1>
+    <p class="sub">网页版 · 勾选参数后直接抓取并下载 Excel</p>
+
+    <div class="card">
+      <h2>爬取配置</h2>
+
+      <div class="row">
+        <div class="label">基金类型</div>
+        <select id="fundType"></select>
+        <span class="hint">（可选，只导出指定类型需本地 GUI；网页版先按全部导出）</span>
+      </div>
+
+      <div class="row">
+        <div class="label">日期类型</div>
+        <div class="radios" id="dateType">
+          <label><input type="radio" name="dtype" value="today" checked /> 今日</label>
+          <label><input type="radio" name="dtype" value="yesterday" /> 昨日</label>
+          <label><input type="radio" name="dtype" value="single" /> 单日</label>
+          <label><input type="radio" name="dtype" value="range" /> 日期范围</label>
+        </div>
+      </div>
+
+      <div class="row hidden" id="rowSingle">
+        <div class="label">目标日期</div>
+        <input type="date" id="singleDate" />
+      </div>
+
+      <div class="row hidden" id="rowRange">
+        <div class="label">起止日期</div>
+        <input type="date" id="startDate" />
+        <span>至</span>
+        <input type="date" id="endDate" />
+        <span class="hint">长区间会较慢</span>
+      </div>
+
+      <div class="row">
+        <div class="label">对标机构</div>
+        <div style="flex:1; min-width:240px">
+          <div class="row" style="margin:0 0 8px">
+            <input type="search" id="benchSearch" placeholder="搜索机构…" style="flex:1" />
+            <button type="button" class="btn-ghost" id="btnCommon" style="padding:8px 12px">常用对标</button>
+            <button type="button" class="btn-ghost" id="btnClear" style="padding:8px 12px">清空</button>
+          </div>
+          <div class="bench-box">
+            <div class="bench-grid" id="benchList"></div>
+          </div>
+          <p class="hint" style="margin:8px 0 0">勾选后会额外生成「对标同业」Excel；对标时间与主区间一致。</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="label">高级</div>
+        <label><input type="checkbox" id="etfFull" /> ETF 新主题抓全历史（很慢，一般不要勾）</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-run" id="btnRun">开始爬取</button>
+      <span class="status" id="status">就绪</span>
+    </div>
+
+    <div class="card">
+      <h2>运行日志</h2>
+      <div class="log" id="log">等待开始…</div>
+    </div>
+  </div>
+
+  <script>
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    let allInstitutions = [];
+    let commonBenchmarks = [];
+
+    function log(msg) {
+      const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      logEl.textContent += `\n[${t}] ${msg}`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function selectedDateType() {
+      return document.querySelector('input[name="dtype"]:checked').value;
+    }
+
+    function syncDateRows() {
+      const v = selectedDateType();
+      document.getElementById("rowSingle").classList.toggle("hidden", v !== "single");
+      document.getElementById("rowRange").classList.toggle("hidden", v !== "range");
+    }
+
+    function renderBench(filter = "") {
+      const q = filter.trim();
+      const box = document.getElementById("benchList");
+      box.innerHTML = "";
+      allInstitutions
+        .filter((n) => !q || n.includes(q))
+        .forEach((name) => {
+          const id = "b_" + name;
+          const lab = document.createElement("label");
+          lab.innerHTML = `<input type="checkbox" value="${name}" id="${id}" /> ${name}`;
+          box.appendChild(lab);
+        });
+    }
+
+    function selectedBenches() {
+      return [...document.querySelectorAll("#benchList input:checked")].map((x) => x.value);
+    }
+
+    async function init() {
+      const meta = await fetch("/api/meta").then((r) => r.json());
+      allInstitutions = meta.institutions || [];
+      commonBenchmarks = meta.common_benchmarks || [];
+      const ft = document.getElementById("fundType");
+      (meta.fund_types || ["全部"]).forEach((x) => {
+        const o = document.createElement("option");
+        o.value = x; o.textContent = x;
+        ft.appendChild(o);
+      });
+      document.getElementById("singleDate").value = meta.today;
+      document.getElementById("startDate").value = meta.today;
+      document.getElementById("endDate").value = meta.today;
+      renderBench();
+      log("已加载对标机构 " + allInstitutions.length + " 家");
+    }
+
+    document.getElementById("dateType").addEventListener("change", syncDateRows);
+    document.getElementById("benchSearch").addEventListener("input", (e) => renderBench(e.target.value));
+    document.getElementById("btnClear").addEventListener("click", () => {
+      document.querySelectorAll("#benchList input").forEach((x) => (x.checked = false));
+    });
+    document.getElementById("btnCommon").addEventListener("click", () => {
+      document.querySelectorAll("#benchList input").forEach((x) => {
+        x.checked = commonBenchmarks.includes(x.value);
+      });
+      log("已勾选常用对标：" + commonBenchmarks.join("、"));
+    });
+
+    document.getElementById("btnRun").addEventListener("click", async () => {
+      const btn = document.getElementById("btnRun");
+      btn.disabled = true;
+      statusEl.className = "status";
+      statusEl.textContent = "正在爬取…";
+      logEl.textContent = "";
+      const body = {
+        date_type: selectedDateType(),
+        single_date: document.getElementById("singleDate").value,
+        start_date: document.getElementById("startDate").value,
+        end_date: document.getElementById("endDate").value,
+        fund_type: document.getElementById("fundType").value,
+        benchmarks: selectedBenches(),
+        etf_full_history: document.getElementById("etfFull").checked,
+      };
+      log("参数：" + JSON.stringify(body));
+      log("开始请求服务器抓取（请稍候）…");
+      try {
+        const resp = await fetch("/api/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          let detail = await resp.text();
+          try { detail = JSON.parse(detail).detail || detail; } catch (_) {}
+          throw new Error(detail || ("HTTP " + resp.status));
+        }
+        const blob = await resp.blob();
+        const cd = resp.headers.get("Content-Disposition") || "";
+        let filename = "证监会网页数据.xlsx";
+        const m = /filename\*?=(?:UTF-8'')?\"?([^\";]+)/i.exec(cd);
+        if (m) filename = decodeURIComponent(m[1]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        statusEl.className = "status ok";
+        statusEl.textContent = "完成，已开始下载";
+        log("完成：已触发下载 " + filename);
+      } catch (e) {
+        statusEl.className = "status err";
+        statusEl.textContent = "失败";
+        log("错误：" + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    syncDateRows();
+    init().catch((e) => log("初始化失败：" + e));
+  </script>
+</body>
+</html>
