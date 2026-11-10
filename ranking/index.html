@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>券商资管业务排名</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>券商资管业务排名</h1>
+    <p id="subtitle"></p>
+    <p style="margin:6px 0 0"><a href="../" style="color:#0b57d0;font-size:13px;text-decoration:none">返回入口</a></p>
+  </div>
+  <div class="controls">
+    <div class="group" id="years" role="tablist" aria-label="年份"></div>
+    <div class="group" id="periods" role="tablist" aria-label="报告期"></div>
+    <input id="q" type="search" placeholder="搜索券商" autocomplete="off" />
+    <button id="csv" type="button">导出 CSV</button>
+  </div>
+</header>
+<main>
+  <div id="empty" class="empty" hidden></div>
+  <div id="wrap" class="wrap">
+    <table id="grid">
+      <thead id="head"></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+</main>
+<script src="ranking.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2026 Q1–Q3 公募规模看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --panel-2: #232d3a;
+      --line: #2f3b4a;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #3d9cf0;
+      --ok: #3ecf8e;
+      --err: #ef6b6b;
+      --flat: #8b9aab;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Noto Sans SC", "DM Sans", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 10% -10%, #1a3a5c 0%, transparent 55%),
+        radial-gradient(700px 400px at 100% 0%, #163028 0%, transparent 50%),
+        var(--bg);
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 36px 20px 72px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+    h1 { margin: 0 0 6px; font-size: 1.6rem; letter-spacing: 0.02em; }
+    .sub { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.6; max-width: 760px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0 16px; }
+    @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
+    .kpi {
+      background: linear-gradient(180deg, var(--panel) 0%, #161d26 100%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+    }
+    .kpi .label { color: var(--muted); font-size: 0.78rem; margin-bottom: 6px; }
+    .kpi .value { font-size: 1.45rem; font-weight: 700; letter-spacing: 0.01em; }
+    .kpi .meta { margin-top: 6px; font-size: 0.8rem; color: #c5d4e4; line-height: 1.45; }
+    .up { color: var(--ok); }
+    .down { color: var(--err); }
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, #161d26 100%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px 8px 12px;
+      margin-bottom: 16px;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 980px; }
+    th, td { padding: 8px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid #243140; }
+    th { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
+    td.name, th.name { text-align: left; position: sticky; left: 0; background: #1a222c; }
+    tr.total td { font-weight: 700; background: #1c2836; }
+    tr.total td.name { background: #1c2836; }
+    caption {
+      caption-side: bottom;
+      text-align: left;
+      color: var(--muted);
+      font-size: 0.75rem;
+      line-height: 1.55;
+      padding: 10px 10px 2px;
+    }
+    footer { margin-top: 8px; color: #6d7d8f; font-size: 0.78rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>2026 年公募规模看板</h1>
+        <p class="sub">国泰海通资管 · 非货（穿透剔除 ETF 联接）· 规则修订口径。Q1 规模取 Q2 台账按同一规则重述的上期数，Q2、Q3 为各季台账当期。单位：亿元。</p>
+      </div>
+      <a href="../">返回入口</a>
+      <span style="color:#8b9aab"> · </span>
+      <a href="index.html">返回上传生成</a>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card">
+      <table id="board">
+        <thead>
+          <tr>
+            <th class="name">品类</th>
+            <th>全市场 Q1</th>
+            <th>全市场 Q2</th>
+            <th>全市场 Q3</th>
+            <th>市场 Q2 环比</th>
+            <th>市场 Q3 环比</th>
+            <th>我司 Q1</th>
+            <th>我司 Q2</th>
+            <th>我司 Q3</th>
+            <th>我司 Q2 环比</th>
+            <th>我司 Q3 环比</th>
+            <th>排名 Q1</th>
+            <th>排名 Q2</th>
+            <th>排名 Q3</th>
+            <th>Q3 排名变化</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <caption>
+          来源：20260630、20260930《公募基金规模统计_自动化_规则修订》。Q1 排名由 Q2 台账的排名与排名变化倒推（排名变化 = 上期排名 − 当期排名）。
+          修订前 Q1 原台账里，主动权益排名 68、固收+ 排名 60；按新规则重述后分别为 73、50。其余品类排名与原 Q1 台账一致。
+          「Q3 排名变化」取 Q3 台账原文，不是本表 Q2、Q3 两列相减。非货原文为升 2（当季重算的上期排名是 59），与 Q2 台账当期第 60 相差 1 位。
+          被动股票 Q2 为我司新进，环比不作百分比。Q3 台账记载的全市场非货环比为 −2.08%（对照重算后的 Q2 非货 229,615.67 亿，与 Q2 台账当期 229,568.23 亿相差约 47 亿，来自穿透更新）。
+        </caption>
+      </table>
+    </div>
+    <footer>公募基金规模统计 · 2026Q1 / 2026Q2 / 2026Q3 · 静态结果，不依赖重新上传季报</footer>
+  </div>
+  <script>
+    const CATS = ["非货合计","被动股票","主动权益","量化","固收","固收+","被动固收","FOF","REITs","QDII"];
+    const mkt = {
+      q1: [209043.83, 35685.13, 39003.56, 4074.55, 65421.91, 32006.18, 16076.33, 3248.69, 1898.73, 8156.62],
+      q2: [229568.23, 32463.76, 48489.36, 4802.36, 70966.37, 35721.4, 19614.64, 3358.18, 2197.14, 9187.31],
+      q3: [224839.4, 31854.51, 39286.7, 4646.66, 73669.65, 36426.75, 21416.83, 3207.83, 2344.28, 8836.03]
+    };
+    const co = {
+      q1: [667.97, 0, 82.32, 168.96, 196.97, 100.48, 11.63, 18.42, 87.66, 1.54],
+      q2: [838.07, 6.29, 116.56, 225.96, 188.3, 114.27, 12.11, 30.36, 143.03, 1.18],
+      q3: [875.14, 3.38, 88.66, 234.79, 189.31, 156.04, 14.21, 31.98, 155.49, 1.27]
+    };
+    const rankQ2 = [60, 62, 75, 4, 84, 51, 77, 24, 4, 45];
+    const chgQ2 = [3, null, -2, 2, -5, -1, 2, 7, 2, -3];
+    const rankQ3 = [57, 70, 73, 4, 81, 45, 75, 25, 3, 45];
+    const chgQ3 = [2, -9, 1, 0, 2, 6, 1, -2, 1, -1];
+
+    const num = (v) => v.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function pct(curr, prev) {
+      if (prev === 0 || prev == null || curr == null) return null;
+      return (curr - prev) / prev;
+    }
+    function pctCell(curr, prev, freshLabel) {
+      if ((prev === 0 || prev == null) && curr > 0) return freshLabel || "新进";
+      const p = pct(curr, prev);
+      if (p == null) return "—";
+      const cls = p > 0 ? "up" : p < 0 ? "down" : "";
+      const sign = p > 0 ? "+" : "";
+      return `<span class="${cls}">${sign}${(p * 100).toFixed(2)}%</span>`;
+    }
+    function rankCell(r) { return r == null ? "—" : r; }
+    function chgCell(c) {
+      if (c == null) return "—";
+      if (c > 0) return `<span class="up">升 ${c}</span>`;
+      if (c < 0) return `<span class="down">降 ${-c}</span>`;
+      return `<span>持平</span>`;
+    }
+
+    const tbody = document.querySelector("#board tbody");
+    CATS.forEach((name, i) => {
+      const q1Rank = chgQ2[i] == null ? null : rankQ2[i] + chgQ2[i];
+      const tr = document.createElement("tr");
+      if (i === 0) tr.className = "total";
+      tr.innerHTML = `
+        <td class="name">${name}</td>
+        <td>${num(mkt.q1[i])}</td>
+        <td>${num(mkt.q2[i])}</td>
+        <td>${num(mkt.q3[i])}</td>
+        <td>${pctCell(mkt.q2[i], mkt.q1[i], "—")}</td>
+        <td>${pctCell(mkt.q3[i], mkt.q2[i], "—")}</td>
+        <td>${co.q1[i] ? num(co.q1[i]) : "—"}</td>
+        <td>${num(co.q2[i])}</td>
+        <td>${num(co.q3[i])}</td>
+        <td>${pctCell(co.q2[i], co.q1[i])}</td>
+        <td>${pctCell(co.q3[i], co.q2[i])}</td>
+        <td>${rankCell(q1Rank)}</td>
+        <td>${rankCell(rankQ2[i])}</td>
+        <td>${rankCell(rankQ3[i])}</td>
+        <td>${chgCell(chgQ3[i])}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    const share = (q) => co[q][0] / mkt[q][0];
+    const rankQ1 = rankQ2[0] + chgQ2[0];
+    document.getElementById("kpis").innerHTML = `
+      <div class="kpi">
+        <div class="label">全市场非货 · 2026Q3</div>
+        <div class="value">${num(mkt.q3[0])}</div>
+        <div class="meta">季环比 ${pctCell(mkt.q3[0], mkt.q2[0])} · 较 Q1 ${pctCell(mkt.q3[0], mkt.q1[0])}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">我司非货 · 2026Q3</div>
+        <div class="value">${num(co.q3[0])}</div>
+        <div class="meta">季环比 ${pctCell(co.q3[0], co.q2[0])} · 较 Q1 ${pctCell(co.q3[0], co.q1[0])}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">我司非货排名 · 2026Q3</div>
+        <div class="value">第 ${rankQ3[0]}</div>
+        <div class="meta">Q3 台账记载较上期 ${chgCell(chgQ3[0])} · Q1 第 ${rankQ1} · Q2 第 ${rankQ2[0]}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">我司非货市占 · 2026Q3</div>
+        <div class="value">${(share("q3") * 100).toFixed(2)}%</div>
+        <div class="meta">Q1 ${(share("q1") * 100).toFixed(2)}% · Q2 ${(share("q2") * 100).toFixed(2)}%</div>
+      </div>`;
+  </script>
+</body>
+</html>
