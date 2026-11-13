@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>证监会审批</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --paper: #fffdf8;
+      --ink: #1f2933;
+      --muted: #62707c;
+      --line: #e4ddd0;
+      --accent: #0b57d0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 72px; }
+    a.back { color: var(--accent); font-weight: 700; text-decoration: none; font-size: 0.88rem; }
+    h1 { margin: 18px 0 8px; font-size: 1.8rem; }
+    .sub { margin: 0 0 18px; color: var(--muted); line-height: 1.65; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tabs button, button.go, button.quiet {
+      font: inherit;
+      cursor: pointer;
+    }
+    .tabs button {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 999px;
+      padding: 8px 14px;
+      color: var(--ink);
+    }
+    .tabs button.active { background: #e8f0fe; color: var(--accent); border-color: #b9c7dc; font-weight: 700; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .hidden { display: none; }
+    label.field { display: block; margin: 14px 0 6px; font-weight: 700; font-size: 0.92rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #fff;
+    }
+    input[type="date"], input[type="month"], input[type="search"], select {
+      font: inherit;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .dates { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .bench {
+      max-height: 240px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 4px 10px;
+    }
+    .bench label { font-size: 0.9rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+    button.go {
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-weight: 700;
+    }
+    button.quiet {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+    .status { margin: 12px 0 0; color: var(--muted); line-height: 1.6; min-height: 1.6em; }
+    .note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="../">返回入口</a>
+    <h1>证监会审批</h1>
+    <p class="sub">条件和以前一样：日常审批进度，或区间里的审批进度、行政许可和获批清单。表格仍由原来的程序生成。</p>
+    <div class="tabs">
+      <button type="button" id="tabDaily" class="active">日常审批</button>
+      <button type="button" id="tabPeriod">区间复盘</button>
+    </div>
+
+    <section class="card" id="panelDaily">
+      <label class="field">日期</label>
+      <div class="row" id="dateType">
+        <label class="chip"><input type="radio" name="dtype" value="today" checked /> 今日</label>
+        <label class="chip"><input type="radio" name="dtype" value="yesterday" /> 昨日</label>
+        <label class="chip"><input type="radio" name="dtype" value="single" /> 单日</label>
+        <label class="chip"><input type="radio" name="dtype" value="range" /> 区间</label>
+      </div>
+      <div class="dates hidden" id="rowSingle">
+        <input type="date" id="singleDate" />
+      </div>
+      <div class="dates hidden" id="rowRange">
+        <input type="date" id="startDate" />
+        <input type="date" id="endDate" />
+      </div>
+      <label class="field" for="fundType">基金类型</label>
+      <select id="fundType"></select>
+      <label class="field" for="benchSearch">对标机构</label>
+      <input type="search" id="benchSearch" placeholder="搜索机构" />
+      <div class="bench" id="benchList"></div>
+      <div class="actions">
+        <button type="button" class="quiet" id="btnCommon">常用对标</button>
+        <button type="button" class="quiet" id="btnClear">清空</button>
+        <label class="chip"><input type="checkbox" id="etfFull" /> ETF 全历史对比</label>
+      </div>
+      <div class="actions">
+        <button type="button" class="go" id="btnDaily">生成 Excel</button>
+      </div>
+      <p class="status" id="statusDaily"></p>
+    </section>
+
+    <section class="card hidden" id="panelPeriod">
+      <label class="field">区间</label>
+      <div class="dates">
+        <input type="date" id="periodStart" />
+        <input type="date" id="periodEnd" />
+      </div>
+      <label class="field" for="approveMonth">获批月份</label>
+      <input type="month" id="approveMonth" />
+      <div class="actions">
+        <label class="chip"><input type="checkbox" id="incProgress" checked /> 审批进度公示</label>
+        <label class="chip"><input type="checkbox" id="incResult" checked /> 行政许可事项</label>
+      </div>
+      <div class="actions">
+        <button type="button" class="go" id="btnPeriod">生成 Excel</button>
+      </div>
+      <p class="status" id="statusPeriod"></p>
+    </section>
+    <p class="note">点生成后会打开 GitHub 的提交页。登录后点绿色的 Submit new issue。跑完后，那条记录下面有 Excel 下载链接。长区间会多等几分钟。</p>
+  </div>
+  <script>
+    const INSTITUTIONS = ["万家", "东方红", "东财基金", "中欧", "中金", "中银", "中银国际", "交银施罗德", "人保资产", "信达澳亚", "兴业", "兴证全球", "创金合信", "前海开源", "华夏", "华安", "华宝", "华泰柏瑞", "华泰资管", "南方", "博时", "嘉实", "国寿安保", "国投瑞银", "国泰基金", "大成", "天弘", "富国", "工银瑞信", "平安", "广发", "建信", "招商", "易方达", "景顺长城", "民生加银", "永赢", "汇添富", "泰康", "浦银安盛", "海富通", "财通基金", "财通资管", "银华", "银河", "长信", "长城", "鹏华"];
+    const COMMON = ["华夏", "易方达", "广发", "富国", "南方", "嘉实", "汇添富", "博时", "招商", "鹏华"];
+    const FUND_TYPES = ["全部", "货币型", "债券型", "混合型", "股票型", "REITs", "QDII", "ETF", "FOF"];
+    const REPO = "https://github.com/zylugarry-lab/csrc-approval-scraper/issues/new";
+
+    function todayISO() {
+      const d = new Date();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return d.getFullYear() + "-" + m + "-" + day;
+    }
+
+    function previousMonth(iso) {
+      const d = new Date(iso + "T00:00:00");
+      d.setDate(1);
+      d.setMonth(d.getMonth() - 1);
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    }
+
+    function selectedDateType() {
+      return document.querySelector('input[name="dtype"]:checked').value;
+    }
+
+    function syncDateRows() {
+      const value = selectedDateType();
+      document.getElementById("rowSingle").classList.toggle("hidden", value !== "single");
+      document.getElementById("rowRange").classList.toggle("hidden", value !== "range");
+    }
+
+    const selected = new Set();
+
+    function syncSelected() {
+      document.querySelectorAll("#benchList input").forEach((el) => {
+        if (el.checked) selected.add(el.value);
+        else selected.delete(el.value);
+      });
+    }
+
+    function renderBench(filter) {
+      const q = (filter || "").trim();
+      const box = document.getElementById("benchList");
+      box.innerHTML = "";
+      INSTITUTIONS.filter((name) => !q || name.includes(q)).forEach((name) => {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = name;
+        input.checked = selected.has(name);
+        label.appendChild(input);
+        label.append(" " + name);
+        box.appendChild(label);
+      });
+    }
+
+    function selectedBenches() {
+      syncSelected();
+      return INSTITUTIONS.filter((name) => selected.has(name));
+    }
+
+    function openIssue(title, payload, statusEl) {
+      const body = "```csrc\n" + JSON.stringify(payload) + "\n```\n\n由入口页面提交。GitHub Actions 会用同一套程序生成 Excel，完成后把下载链接写在这条记录下面。";
+      const url = REPO + "?title=" + encodeURIComponent(title) + "&body=" + encodeURIComponent(body);
+      statusEl.textContent = "已打开 GitHub 提交页。登录后点绿色的 Submit new issue，完成后再回到那条记录下载。";
+      window.open(url, "_blank", "noopener");
+    }
+
+    document.getElementById("tabDaily").onclick = () => {
+      document.getElementById("tabDaily").classList.add("active");
+      document.getElementById("tabPeriod").classList.remove("active");
+      document.getElementById("panelDaily").classList.remove("hidden");
+      document.getElementById("panelPeriod").classList.add("hidden");
+    };
+    document.getElementById("tabPeriod").onclick = () => {
+      document.getElementById("tabPeriod").classList.add("active");
+      document.getElementById("tabDaily").classList.remove("active");
+      document.getElementById("panelPeriod").classList.remove("hidden");
+      document.getElementById("panelDaily").classList.add("hidden");
+    };
+
+    const today = todayISO();
+    document.getElementById("singleDate").value = today;
+    document.getElementById("startDate").value = today;
+    document.getElementById("endDate").value = today;
+    document.getElementById("periodEnd").value = today;
+    document.getElementById("periodStart").value = today.slice(0, 4) + "-06-30";
+    document.getElementById("approveMonth").value = previousMonth(today);
+    FUND_TYPES.forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      document.getElementById("fundType").appendChild(option);
+    });
+    renderBench();
+    syncDateRows();
+    document.getElementById("dateType").addEventListener("change", syncDateRows);
+    document.getElementById("benchSearch").addEventListener("input", (event) => {
+      syncSelected();
+      renderBench(event.target.value);
+    });
+    document.getElementById("btnClear").onclick = () => {
+      selected.clear();
+      renderBench(document.getElementById("benchSearch").value);
+    };
+    document.getElementById("btnCommon").onclick = () => {
+      selected.clear();
+      COMMON.forEach((name) => selected.add(name));
+      renderBench(document.getElementById("benchSearch").value);
+    };
+    document.getElementById("btnDaily").onclick = () => {
+      const dateType = selectedDateType();
+      const payload = {
+        kind: "daily",
+        date_type: dateType,
+        single_date: document.getElementById("singleDate").value,
+        start_date: document.getElementById("startDate").value,
+        end_date: document.getElementById("endDate").value,
+        fund_type: document.getElementById("fundType").value,
+        benchmarks: selectedBenches(),
+        etf_full_history: document.getElementById("etfFull").checked
+      };
+      const label = dateType === "today" ? today : dateType === "yesterday" ? "昨日" : dateType === "single" ? payload.single_date : payload.start_date + "至" + payload.end_date;
+      openIssue("审批导出 日常 " + label, payload, document.getElementById("statusDaily"));
+    };
+    document.getElementById("btnPeriod").onclick = () => {
+      const includeProgress = document.getElementById("incProgress").checked;
+      const includeResult = document.getElementById("incResult").checked;
+      const statusEl = document.getElementById("statusPeriod");
+      if (!includeProgress && !includeResult) {
+        statusEl.textContent = "请至少勾选一个数据源。";
+        return;
+      }
+      const payload = {
+        kind: "period",
+        start_date: document.getElementById("periodStart").value,
+        end_date: document.getElementById("periodEnd").value,
+        approve_month: document.getElementById("approveMonth").value,
+        include_progress: includeProgress,
+        include_result: includeResult
+      };
+      openIssue("审批导出 区间 " + payload.start_date + "至" + payload.end_date, payload, statusEl);
+    };
+  </script>
+</body>
+</html>

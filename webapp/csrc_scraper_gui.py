@@ -1789,11 +1789,15 @@ def export_json(data: List[Dict], filepath: str):
 
 
 # ============================================================
-# GUI 界面
+# GUI 界面（仅桌面版需要 tkinter；网页版 import 本模块时跳过）
 # ============================================================
 
-import tkinter as tk
-from tkinter import ttk, filedialog
+try:
+    import tkinter as tk
+    from tkinter import ttk, filedialog
+except ImportError:  # 服务器 / Docker 无 Tk
+    tk = ttk = filedialog = None  # type: ignore
+
 import subprocess
 
 FONT_TITLE = ("PingFang SC" if sys.platform == "darwin" else "Microsoft YaHei", 16, "bold")

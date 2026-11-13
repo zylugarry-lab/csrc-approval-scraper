@@ -217,6 +217,7 @@ def run_job(
     output_dir: Optional[str] = None,
     etf_full_history: bool = False,
     mode: str = "progress",
+    fund_type: Optional[str] = None,
 ) -> Dict:
     logger = _setup_logger()
     kind, start, end = _parse_date_spec(date_spec)
@@ -262,6 +263,11 @@ def run_job(
             benchmark_data = _fetch_daily(client, mode, start, logger)
         else:
             benchmark_data = _fetch_date_range(client, mode, start, end, logger)
+
+    if fund_type and fund_type != "全部":
+        data = [r for r in data if r.get("fund_type") == fund_type]
+        if benchmark_data is not None:
+            benchmark_data = [r for r in benchmark_data if r.get("fund_type") == fund_type]
 
     base_name = export_output_base_name()
     xlsx_path = os.path.join(out_dir, f"{base_name}.xlsx")
