@@ -37,6 +37,19 @@
     .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
     h1 { margin: 0 0 6px; font-size: 1.6rem; letter-spacing: 0.02em; }
     .sub { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.6; max-width: 760px; }
+    .actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    button.export {
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #041018;
+      background: var(--accent);
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    button.export:hover { filter: brightness(1.08); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0 16px; }
     @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 560px) { .kpis { grid-template-columns: 1fr; } }
@@ -83,9 +96,11 @@
         <h1>2026 年公募规模看板</h1>
         <p class="sub">国泰海通资管 · 非货（穿透剔除 ETF 联接）· 规则修订口径。Q1 规模取 Q2 台账按同一规则重述的上期数，Q2、Q3 为各季台账当期。单位：亿元。</p>
       </div>
-      <a href="../">返回入口</a>
-      <span style="color:#8b9aab"> · </span>
-      <a href="index.html">返回上传生成</a>
+      <div class="actions">
+        <button type="button" id="exportExcel" class="export">导出 Excel</button>
+        <a href="../">返回入口</a>
+        <a href="index.html">返回上传生成</a>
+      </div>
     </div>
     <div class="kpis" id="kpis"></div>
     <div class="card">
@@ -118,9 +133,10 @@
         </caption>
       </table>
     </div>
-    <footer>公募基金规模统计 · 2026Q1 / 2026Q2 / 2026Q3 · 静态结果，不依赖重新上传季报</footer>
+    <footer>公募基金规模统计 · 2026Q1 / 2026Q2 / 2026Q3 · 看板上的数字可直接导出 Excel</footer>
   </div>
   <script>
+    // EXPORT_FNS
     const CATS = ["非货合计","被动股票","主动权益","量化","固收","固收+","被动固收","FOF","REITs","QDII"];
     const mkt = {
       q1: [209043.83, 35685.13, 39003.56, 4074.55, 65421.91, 32006.18, 16076.33, 3248.69, 1898.73, 8156.62],
@@ -136,6 +152,301 @@
     const chgQ2 = [3, null, -2, 2, -5, -1, 2, 7, 2, -3];
     const rankQ3 = [57, 70, 73, 4, 81, 45, 75, 25, 3, 45];
     const chgQ3 = [2, -9, 1, 0, 2, 6, 1, -2, 1, -1];
+
+    function ratio(curr, prev) {
+      if (prev === 0 || prev == null || curr == null) return null;
+      return (curr - prev) / prev;
+    }
+    function q1RankAt(i) {
+      return chgQ2[i] == null ? null : rankQ2[i] + chgQ2[i];
+    }
+
+    const CRC_TABLE = (() => {
+      const t = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+      }
+      return t;
+    })();
+    function crc32(bytes) {
+      let c = 0xffffffff;
+      for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    }
+    function zipStore(files) {
+      const enc = new TextEncoder();
+      const locals = [];
+      const centrals = [];
+      let offset = 0;
+      const time = 22016;
+      const date = 23917;
+      for (const f of files) {
+        const name = enc.encode(f.name);
+        const data = f.data;
+        const crc = crc32(data);
+        const local = new Uint8Array(30 + name.length);
+        const v = new DataView(local.buffer);
+        v.setUint32(0, 0x04034b50, true);
+        v.setUint16(4, 20, true);
+        v.setUint16(8, 0, true);
+        v.setUint16(10, time, true);
+        v.setUint16(12, date, true);
+        v.setUint32(14, crc, true);
+        v.setUint32(18, data.length, true);
+        v.setUint32(22, data.length, true);
+        v.setUint16(26, name.length, true);
+        local.set(name, 30);
+        locals.push(local, data);
+        const central = new Uint8Array(46 + name.length);
+        const cv = new DataView(central.buffer);
+        cv.setUint32(0, 0x02014b50, true);
+        cv.setUint16(4, 20, true);
+        cv.setUint16(6, 20, true);
+        cv.setUint16(12, time, true);
+        cv.setUint16(14, date, true);
+        cv.setUint32(16, crc, true);
+        cv.setUint32(20, data.length, true);
+        cv.setUint32(24, data.length, true);
+        cv.setUint16(28, name.length, true);
+        cv.setUint32(42, offset, true);
+        central.set(name, 46);
+        centrals.push(central);
+        offset += local.length + data.length;
+      }
+      const centralSize = centrals.reduce((n, b) => n + b.length, 0);
+      const eocd = new Uint8Array(22);
+      const e = new DataView(eocd.buffer);
+      e.setUint32(0, 0x06054b50, true);
+      e.setUint16(8, files.length, true);
+      e.setUint16(10, files.length, true);
+      e.setUint32(12, centralSize, true);
+      e.setUint32(16, offset, true);
+      const chunks = locals.concat(centrals, [eocd]);
+      const total = chunks.reduce((n, b) => n + b.length, 0);
+      const out = new Uint8Array(total);
+      let p = 0;
+      for (const b of chunks) { out.set(b, p); p += b.length; }
+      return out;
+    }
+    const encXml = new TextEncoder();
+    function xmlBytes(s) { return encXml.encode(s); }
+    function esc(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function colName(i) {
+      let s = "";
+      let n = i + 1;
+      while (n) {
+        const m = (n - 1) % 26;
+        s = String.fromCharCode(65 + m) + s;
+        n = Math.floor((n - 1) / 26);
+      }
+      return s;
+    }
+    function cellXml(c, r, value, style) {
+      if (value == null || value === "") return "";
+      const ref = colName(c) + r;
+      const st = style ? ` s="${style}"` : "";
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return `<c r="${ref}"${st}><v>${value}</v></c>`;
+      }
+      return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${esc(value)}</t></is></c>`;
+    }
+    function sheetXml(rows, cols, merges, frozenRow) {
+      const body = rows.map((row, i) => {
+        const r = i + 1;
+        const cells = row.map((item, c) => {
+          if (!item) return "";
+          return cellXml(c, r, item.v, item.s);
+        }).join("");
+        return `<row r="${r}">${cells}</row>`;
+      }).join("");
+      const colXml = (cols || []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
+      const mergeXml = merges && merges.length
+        ? `<mergeCells count="${merges.length}">${merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`
+        : "";
+      const freeze = frozenRow
+        ? `<sheetViews><sheetView workbookViewId="0"><pane ySplit="${frozenRow}" topLeftCell="A${frozenRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+        : "";
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+  ${freeze}
+  <cols>${colXml}</cols>
+  <sheetData>${body}</sheetData>
+  ${mergeXml}
+  <pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>
+  <pageSetup orientation="landscape" fitToWidth="1" fitToHeight="1"/>
+</worksheet>`;
+    }
+    function scaleCell(curr, prev, style, fresh) {
+      if ((prev === 0 || prev == null) && curr > 0) return { v: fresh || "新进", s: 0 };
+      const p = ratio(curr, prev);
+      if (p == null) return { v: "—", s: 0 };
+      return { v: p, s: style };
+    }
+    function numCell(v, style) {
+      if (v == null) return { v: "—", s: 0 };
+      return { v: v, s: style };
+    }
+
+    function buildWorkbookBytes() {
+      const S = { title: 1, head: 2, num: 3, pct: 4, chg: 5, tnum: 6, tpct: 7, note: 8, rank: 9, trank: 10, tname: 11 };
+      const headers = ["品类","全市场 Q1","全市场 Q2","全市场 Q3","市场 Q2 环比","市场 Q3 环比","我司 Q1","我司 Q2","我司 Q3","我司 Q2 环比","我司 Q3 环比","排名 Q1","排名 Q2","排名 Q3","Q3 排名变化"];
+      const detail = [
+        [{ v: "2026 年公募规模看板", s: S.title }],
+        [{ v: "国泰海通资管 · 非货（穿透剔除 ETF 联接）· 规则修订口径。单位：亿元。Q1 为 Q2 台账按同一规则重述的上期数。", s: S.note }],
+        [],
+        headers.map((h) => ({ v: h, s: S.head }))
+      ];
+      CATS.forEach((name, i) => {
+        const total = i === 0;
+        const ns = total ? S.tnum : S.num;
+        const ps = total ? S.tpct : S.pct;
+        const rs = total ? S.trank : S.rank;
+        const coQ1 = co.q1[i] === 0 ? { v: "—", s: 0 } : numCell(co.q1[i], ns);
+        detail.push([
+          { v: name, s: total ? S.tname : 0 },
+          numCell(mkt.q1[i], ns),
+          numCell(mkt.q2[i], ns),
+          numCell(mkt.q3[i], ns),
+          scaleCell(mkt.q2[i], mkt.q1[i], ps, "—"),
+          scaleCell(mkt.q3[i], mkt.q2[i], ps, "—"),
+          coQ1,
+          numCell(co.q2[i], ns),
+          numCell(co.q3[i], ns),
+          scaleCell(co.q2[i], co.q1[i], ps, "新进"),
+          scaleCell(co.q3[i], co.q2[i], ps, "新进"),
+          q1RankAt(i) == null ? { v: "—", s: 0 } : { v: q1RankAt(i), s: rs },
+          { v: rankQ2[i], s: rs },
+          { v: rankQ3[i], s: rs },
+          { v: chgQ3[i], s: S.chg }
+        ]);
+      });
+
+      const share = (q) => co[q][0] / mkt[q][0];
+      const rankQ1 = q1RankAt(0);
+      const overview = [
+        [{ v: "2026 年公募规模看板 · 概览", s: S.title }],
+        [{ v: "与页面顶部四张卡片一致。规模单位：亿元。环比 =（当期 − 上期）/ 上期。", s: S.note }],
+        [],
+        ["指标","2026Q1","2026Q2","2026Q3","Q2 环比","Q3 环比","较 Q1"].map((h) => ({ v: h, s: S.head })),
+        [
+          { v: "全市场非货" },
+          numCell(mkt.q1[0], S.num), numCell(mkt.q2[0], S.num), numCell(mkt.q3[0], S.num),
+          scaleCell(mkt.q2[0], mkt.q1[0], S.pct), scaleCell(mkt.q3[0], mkt.q2[0], S.pct), scaleCell(mkt.q3[0], mkt.q1[0], S.pct)
+        ],
+        [
+          { v: "我司非货" },
+          numCell(co.q1[0], S.num), numCell(co.q2[0], S.num), numCell(co.q3[0], S.num),
+          scaleCell(co.q2[0], co.q1[0], S.pct), scaleCell(co.q3[0], co.q2[0], S.pct), scaleCell(co.q3[0], co.q1[0], S.pct)
+        ],
+        [
+          { v: "我司非货市占" },
+          { v: share("q1"), s: S.pct }, { v: share("q2"), s: S.pct }, { v: share("q3"), s: S.pct },
+          { v: "" }, { v: "" }, { v: "" }
+        ],
+        [
+          { v: "我司非货排名" },
+          { v: rankQ1, s: S.rank }, { v: rankQ2[0], s: S.rank }, { v: rankQ3[0], s: S.rank },
+          { v: "" }, { v: chgQ3[0], s: S.chg }, { v: "" }
+        ],
+        [],
+        [{ v: "Q3 排名变化取台账原文（升 / 降 / 持平），不是本表 Q2、Q3 名次相减。非货原文为升 2。", s: S.note }]
+      ];
+
+      const notes = [
+        [{ v: "口径说明", s: S.title }],
+        [],
+        [{ v: "来源：20260630、20260930《公募基金规模统计_自动化_规则修订》。", s: S.note }],
+        [{ v: "Q1 规模取 Q2 台账按同一规则重述的上期数，便于和 Q2、Q3 比较。Q2、Q3 为各季台账当期。", s: S.note }],
+        [{ v: "Q1 排名由 Q2 台账的排名与排名变化倒推（排名变化 = 上期排名 − 当期排名）。", s: S.note }],
+        [{ v: "修订前 Q1 原台账里，主动权益排名 68、固收+ 排名 60；按新规则重述后分别为 73、50。其余品类排名与原 Q1 台账一致。", s: S.note }],
+        [{ v: "「Q3 排名变化」取 Q3 台账原文。非货原文为升 2（当季重算的上期排名是 59），与 Q2 台账当期第 60 相差 1 位。", s: S.note }],
+        [{ v: "被动股票 Q2 为我司新进，环比不作百分比，表中记为「新进」。", s: S.note }],
+        [{ v: "Q3 台账记载的全市场非货环比为 −2.08%（对照重算后的 Q2 非货 229,615.67 亿）。本表按 Q2 台账当期 229,568.23 亿计算，环比为 −2.06%，两者相差约 47 亿，来自穿透更新。", s: S.note }],
+        [{ v: "本文件由看板页面导出，数字与页面一致，写在单元格里，可以继续用公式引用。", s: S.note }]
+      ];
+
+      const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="3">
+    <numFmt numFmtId="164" formatCode="#,##0.00"/>
+    <numFmt numFmtId="165" formatCode="+0.00%;-0.00%;0.00%"/>
+    <numFmt numFmtId="166" formatCode="&quot;升 &quot;0;&quot;降 &quot;0;&quot;持平&quot;"/>
+  </numFmts>
+  <fonts count="5">
+    <font><sz val="11"/><name val="微软雅黑"/></font>
+    <font><b/><sz val="16"/><name val="微软雅黑"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font>
+    <font><b/><sz val="11"/><name val="微软雅黑"/></font>
+    <font><sz val="10"/><color rgb="FF666666"/><name val="微软雅黑"/></font>
+  </fonts>
+  <fills count="4">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFE8F1FA"/></patternFill></fill>
+  </fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="12">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+    <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+    <xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+    <xf numFmtId="164" fontId="3" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1"/>
+    <xf numFmtId="165" fontId="3" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1"/>
+    <xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment wrapText="1"/></xf>
+    <xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+    <xf numFmtId="1" fontId="3" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+      const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="概览" sheetId="1" r:id="rId1"/>
+    <sheet name="分品类" sheetId="2" r:id="rId2"/>
+    <sheet name="说明" sheetId="3" r:id="rId3"/>
+  </sheets>
+</workbook>`;
+      const files = [
+        { name: "[Content_Types].xml", data: xmlBytes(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`) },
+        { name: "_rels/.rels", data: xmlBytes(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`) },
+        { name: "xl/workbook.xml", data: xmlBytes(workbook) },
+        { name: "xl/_rels/workbook.xml.rels", data: xmlBytes(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`) },
+        { name: "xl/styles.xml", data: xmlBytes(styles) },
+        { name: "xl/worksheets/sheet1.xml", data: xmlBytes(sheetXml(overview, [22, 16, 16, 16, 14, 14, 14], ["A1:G1", "A2:G2"])) },
+        { name: "xl/worksheets/sheet2.xml", data: xmlBytes(sheetXml(detail, [14, 16, 16, 16, 14, 14, 14, 14, 14, 14, 14, 12, 12, 12, 16], ["A1:O1", "A2:O2"], 4)) },
+        { name: "xl/worksheets/sheet3.xml", data: xmlBytes(sheetXml(notes, [120], ["A1:A1"])) }
+      ];
+      return zipStore(files);
+    }
+    // END_EXPORT_FNS
 
     const num = (v) => v.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function pct(curr, prev) {
@@ -205,6 +516,18 @@
         <div class="value">${(share("q3") * 100).toFixed(2)}%</div>
         <div class="meta">Q1 ${(share("q1") * 100).toFixed(2)}% · Q2 ${(share("q2") * 100).toFixed(2)}%</div>
       </div>`;
+
+    document.getElementById("exportExcel").addEventListener("click", () => {
+      const bytes = buildWorkbookBytes();
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "2026年公募规模看板_Q1-Q3.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    });
   </script>
 </body>
 </html>
