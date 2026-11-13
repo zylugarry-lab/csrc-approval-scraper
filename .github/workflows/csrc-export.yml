@@ -2,6 +2,8 @@ name: 证监会审批导出
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: write

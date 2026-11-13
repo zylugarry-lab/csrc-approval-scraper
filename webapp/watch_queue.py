@@ -5,13 +5,27 @@
 from __future__ import annotations
 
 import json
+import ssl
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 BIN = "https://extendsclass.com/api/json-storage/bin/fdabeee"
 REPO = "zylugarry-lab/csrc-approval-scraper"
+
+
+def _read(req) -> str:
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8", "replace")
+    except urllib.error.URLError as exc:
+        if "CERTIFICATE_VERIFY_FAILED" not in str(exc):
+            raise
+        ctx = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            return resp.read().decode("utf-8", "replace")
 
 
 def pending() -> int:
@@ -19,8 +33,7 @@ def pending() -> int:
         BIN + "?t=" + str(time.time()),
         headers={"User-Agent": "csrc-watch"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        text = resp.read().decode("utf-8", "replace")
+    text = _read(req)
     cut = text.find("<!")
     if cut != -1:
         text = text[:cut]
