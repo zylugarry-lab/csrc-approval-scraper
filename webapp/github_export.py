@@ -149,14 +149,48 @@ def run(req: dict, out_dir: Path) -> Path:
     return dest
 
 
+def load_request() -> dict:
+    payload = os.environ.get("PAYLOAD", "").strip()
+    if payload:
+        if len(payload) > 20000:
+            raise ValueError("请求内容过长")
+        data = json.loads(payload)
+        if not isinstance(data, dict):
+            raise ValueError("参数格式不对")
+        return data
+    return parse_body(os.environ.get("ISSUE_BODY", ""))
+
+
+def export_to_out(payload: dict, request_id: str, out: Path) -> Path:
+    if not re.fullmatch(r"[a-z0-9]{8,40}", request_id):
+        raise ValueError("请求编号不对")
+    if not isinstance(payload, dict):
+        raise ValueError("参数格式不对")
+    produced = run(payload, out)
+    suffix = produced.suffix.lower()
+    if suffix not in {".xlsx", ".zip"}:
+        suffix = ".bin"
+    target = out / f"{request_id}{suffix}"
+    filename = produced.name
+    if produced.resolve() != target.resolve():
+        shutil.copy2(produced, target)
+        produced.unlink(missing_ok=True)
+    (out / f"{request_id}.json").write_text(
+        json.dumps({"filename": filename, "file": target.name}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return target
+
+
 def main() -> int:
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "export-out")
+    request_id = os.environ.get("REQUEST_ID", "").strip()
     try:
-        produced = run(parse_body(os.environ.get("ISSUE_BODY", "")), out)
+        target = export_to_out(load_request(), request_id, out)
     except Exception as exc:
         print(f"导出失败: {exc}", file=sys.stderr)
         return 1
-    print(produced)
+    print(target)
     return 0
 
 

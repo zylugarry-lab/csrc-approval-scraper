@@ -1,12 +1,12 @@
 name: 证监会审批导出
 
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: csrc-export
@@ -14,50 +14,48 @@ concurrency:
 
 jobs:
   export:
-    if: startsWith(github.event.issue.title, '审批导出')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      TZ: Asia/Shanghai
-      ISSUE_BODY: ${{ github.event.issue.body }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: 是否有待生成
+        id: queue
+        run: python3 webapp/drain_queue.py --peek
+
       - uses: actions/setup-python@v5
+        if: steps.queue.outputs.pending == '1'
         with:
           python-version: "3.11"
 
       - name: 安装依赖
+        if: steps.queue.outputs.pending == '1'
         working-directory: webapp
         run: pip install -r requirements.txt
 
       - name: 生成 Excel
-        working-directory: webapp
-        run: python github_export.py ../export-out
+        id: build
+        if: steps.queue.outputs.pending == '1'
+        run: python3 webapp/drain_queue.py
 
-      - uses: actions/upload-artifact@v4
+      - name: 提交结果
+        if: steps.build.outputs.produced == '1'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          find approval/out -type f ! -name '.gitkeep' -mmin +1440 -delete
+          git add -f approval/out
+          git diff --cached --quiet || git commit -m "Publish approval export"
+          git push
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.build.outputs.produced == '1'
         with:
-          name: csrc-export-${{ github.event.issue.number }}
-          path: export-out/*
-          if-no-files-found: error
+          path: .
 
-      - name: 回写下载链接
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" --body "$(cat <<EOF
-          导出完成。
-
-          下载 Excel：打开 [这次运行](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})，在页面底部 Artifacts 里下载 \`csrc-export-${{ github.event.issue.number }}\`。
-
-          EOF
-          )"
-          gh issue close "${{ github.event.issue.number }}" --reason completed
-
-      - name: 失败时回写
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh issue comment "${{ github.event.issue.number }}" --body "导出失败。打开 [这次运行](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) 查看日志。"
+      - id: deployment
+        if: steps.build.outputs.produced == '1'
+        uses: actions/deploy-pages@v4

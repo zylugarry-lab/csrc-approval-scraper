@@ -163,13 +163,12 @@
       </div>
       <p class="status" id="statusPeriod"></p>
     </section>
-    <p class="note">点生成后会打开 GitHub 的提交页。登录后点绿色的 Submit new issue。跑完后，那条记录下面有 Excel 下载链接。长区间会多等几分钟。</p>
+    <p class="note">点生成后请留在这个页面，文件会直接下载。Windows 上用 Excel 或 WPS 打开即可。长区间和 ETF 全历史会多等几分钟。</p>
   </div>
   <script>
     const INSTITUTIONS = ["万家", "东方红", "东财基金", "中欧", "中金", "中银", "中银国际", "交银施罗德", "人保资产", "信达澳亚", "兴业", "兴证全球", "创金合信", "前海开源", "华夏", "华安", "华宝", "华泰柏瑞", "华泰资管", "南方", "博时", "嘉实", "国寿安保", "国投瑞银", "国泰基金", "大成", "天弘", "富国", "工银瑞信", "平安", "广发", "建信", "招商", "易方达", "景顺长城", "民生加银", "永赢", "汇添富", "泰康", "浦银安盛", "海富通", "财通基金", "财通资管", "银华", "银河", "长信", "长城", "鹏华"];
     const COMMON = ["华夏", "易方达", "广发", "富国", "南方", "嘉实", "汇添富", "博时", "招商", "鹏华"];
     const FUND_TYPES = ["全部", "货币型", "债券型", "混合型", "股票型", "REITs", "QDII", "ETF", "FOF"];
-    const REPO = "https://github.com/zylugarry-lab/csrc-approval-scraper/issues/new";
 
     function todayISO() {
       const d = new Date();
@@ -225,11 +224,85 @@
       return INSTITUTIONS.filter((name) => selected.has(name));
     }
 
-    function openIssue(title, payload, statusEl) {
-      const body = "```csrc\n" + JSON.stringify(payload) + "\n```\n\n由入口页面提交。GitHub Actions 会用同一套程序生成 Excel，完成后把下载链接写在这条记录下面。";
-      const url = REPO + "?title=" + encodeURIComponent(title) + "&body=" + encodeURIComponent(body);
-      statusEl.textContent = "已打开 GitHub 提交页。登录后点绿色的 Submit new issue，完成后再回到那条记录下载。";
-      window.open(url, "_blank", "noopener");
+    function requestId() {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function saveBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "csrc-export.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+
+    async function waitForMeta(id, statusEl) {
+      const started = Date.now();
+      while (Date.now() - started < 40 * 60 * 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const mins = Math.floor((Date.now() - started) / 60000);
+        if (mins >= 1) {
+          statusEl.textContent = "正在生成，已等待 " + mins + " 分钟。长区间和 ETF 全历史会更久，请不要关闭页面。";
+        }
+        try {
+          const resp = await fetch("./out/" + id + ".json?t=" + Date.now(), { cache: "no-store" });
+          if (resp.ok) {
+            const meta = await resp.json();
+            if (meta && (meta.error || (meta.file && meta.filename))) return meta;
+          }
+        } catch (_) {}
+      }
+      throw new Error("等待超时，请稍后再试");
+    }
+
+    const QUEUE = "https://extendsclass.com/api/json-storage/bin/fdabeee";
+
+    async function readQueue() {
+      const resp = await fetch(QUEUE + "?t=" + Date.now(), { cache: "no-store" });
+      if (!resp.ok) throw new Error("提交生成请求失败");
+      const text = await resp.text();
+      const cut = text.indexOf("<!");
+      const data = JSON.parse(cut === -1 ? text : text.slice(0, cut));
+      if (!data || !Array.isArray(data.requests)) data.requests = [];
+      return data;
+    }
+
+    async function enqueue(payload) {
+      const data = await readQueue();
+      const pending = data.requests.filter((item) => item && !item.done);
+      if (pending.length >= 6) throw new Error("当前排队的人比较多，请过几分钟再试");
+      const id = requestId();
+      data.requests.push({ id, payload, done: false });
+      const put = await fetch(QUEUE, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: data.requests.slice(-40) })
+      });
+      if (!put.ok) throw new Error("提交生成请求失败");
+      return id;
+    }
+
+    async function generate(payload, statusEl, button) {
+      button.disabled = true;
+      statusEl.textContent = "正在生成，请留在这个页面。完成后会直接下载，Excel 和 WPS 都能打开。";
+      try {
+        const id = await enqueue(payload);
+        const meta = await waitForMeta(id, statusEl);
+        if (meta.error) throw new Error(meta.error);
+        const fileResp = await fetch("./out/" + encodeURIComponent(meta.file) + "?t=" + Date.now(), { cache: "no-store" });
+        if (!fileResp.ok) throw new Error("文件还没有发布出来");
+        saveBlob(await fileResp.blob(), meta.filename);
+        statusEl.textContent = "已开始下载。若浏览器询问保存位置，保存后用 Excel 或 WPS 打开。";
+      } catch (err) {
+        statusEl.textContent = "没有生成成功：" + (err && err.message ? err.message : err);
+      } finally {
+        button.disabled = false;
+      }
     }
 
     document.getElementById("tabDaily").onclick = () => {
@@ -286,8 +359,7 @@
         benchmarks: selectedBenches(),
         etf_full_history: document.getElementById("etfFull").checked
       };
-      const label = dateType === "today" ? today : dateType === "yesterday" ? "昨日" : dateType === "single" ? payload.single_date : payload.start_date + "至" + payload.end_date;
-      openIssue("审批导出 日常 " + label, payload, document.getElementById("statusDaily"));
+      generate(payload, document.getElementById("statusDaily"), document.getElementById("btnDaily"));
     };
     document.getElementById("btnPeriod").onclick = () => {
       const includeProgress = document.getElementById("incProgress").checked;
@@ -305,7 +377,7 @@
         include_progress: includeProgress,
         include_result: includeResult
       };
-      openIssue("审批导出 区间 " + payload.start_date + "至" + payload.end_date, payload, statusEl);
+      generate(payload, statusEl, document.getElementById("btnPeriod"));
     };
   </script>
 </body>

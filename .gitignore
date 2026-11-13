@@ -7,3 +7,6 @@ skill/输出/*
 skill/prefs.json
 skill/_user_meta.json
 webapp/output/
+approval/token.js
+approval/out/*
+!approval/out/.gitkeep
