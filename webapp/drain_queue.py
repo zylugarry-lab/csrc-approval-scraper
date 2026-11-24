@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -29,13 +30,25 @@ def _parse_body(text: str) -> dict:
     return data
 
 
+def _read(req, timeout=25, attempts=3) -> bytes:
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except (TimeoutError, urllib.error.URLError, ConnectionError) as exc:
+            last = exc
+            if attempt < attempts:
+                time.sleep(2 * attempt)
+    raise last
+
+
 def load_bin() -> dict:
     req = urllib.request.Request(
         BIN + "?t=" + str(time.time()),
         headers={"User-Agent": "csrc-export"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return _parse_body(resp.read().decode("utf-8", "replace"))
+    return _parse_body(_read(req).decode("utf-8", "replace"))
 
 
 def save_bin(data: dict) -> None:
@@ -46,8 +59,7 @@ def save_bin(data: dict) -> None:
         method="PUT",
         headers={"Content-Type": "application/json", "User-Agent": "csrc-export"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        resp.read()
+    _read(req)
 
 
 def pending_items(data: dict) -> list:
@@ -79,7 +91,15 @@ def main() -> int:
     os.environ["TZ"] = "Asia/Shanghai"
     if hasattr(time, "tzset"):
         time.tzset()
-    data = load_bin()
+    try:
+        data = load_bin()
+    except (TimeoutError, urllib.error.URLError, ConnectionError) as exc:
+        if "--peek" in sys.argv:
+            print(f"队列暂时读不到，这轮跳过：{exc}")
+            _github_output("pending", "0")
+            return 0
+        print(f"队列读不到：{exc}", file=sys.stderr)
+        return 1
     todo = pending_items(data)
     if "--peek" in sys.argv:
         _github_output("pending", "1" if todo else "0")
