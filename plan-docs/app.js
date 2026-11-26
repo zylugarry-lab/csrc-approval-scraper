@@ -23,7 +23,19 @@ function setStatus(text) {
 }
 
 function stemOf(name) {
-  return name.replace(/\.docx$/i, "").replace(/管理合同.*$/, "").replace(/合同$/, "");
+  return name
+    .replace(/\.docx$/i, "")
+    .replace(/资产管理合同.*$/, "")
+    .replace(/管理合同.*$/, "")
+    .replace(/合同$/, "");
+}
+
+function productFromReport(report, fallback) {
+  const m = String(report || "").match(/产品：(.+)/);
+  let t = (m ? m[1].trim() : "") || fallback || "计划";
+  t = t.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "");
+  t = t.replace(/说明书$/, "").replace(/风险揭示书$/, "");
+  return t || fallback || "计划";
 }
 
 function render() {
@@ -199,7 +211,7 @@ except Exception as exc:
   const smsBytes = engine.FS.readFile("/work/sms.docx");
   const riskBytes = engine.FS.readFile("/work/risk.docx");
   const type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  const stem = stemOf(item.file.name);
+  const stem = productFromReport(report, stemOf(item.file.name));
   item.smsName = stem + "说明书-自动生成.docx";
   item.riskName = stem + "风险揭示书-自动生成.docx";
   item.sms = new Blob([smsBytes], { type });

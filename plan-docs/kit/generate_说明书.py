@@ -46,6 +46,54 @@ def yellow_texts(para: Paragraph) -> list[str]:
     return parts
 
 
+TITLE_KEEP = frozenset({"说明书", "风险揭示书", "年"})
+TITLE_SUFFIXES = ("风险揭示书", "说明书")
+
+
+def strip_title_suffix(text: str) -> str:
+    t = (text or "").strip()
+    for suffix in TITLE_SUFFIXES:
+        if t.endswith(suffix):
+            return t[: -len(suffix)].strip()
+    return t
+
+
+def paragraph_plain(para: Paragraph) -> str:
+    return "".join(r.text or "" for r in para.runs)
+
+
+def yellow_variable_text(para: Paragraph) -> str:
+    parts: list[str] = []
+    for run in para.runs:
+        if not is_yellow(run):
+            continue
+        t = run.text or ""
+        if t.strip() in TITLE_KEEP:
+            continue
+        parts.append(t)
+    return strip_title_suffix("".join(parts).strip())
+
+
+def ensure_title_suffix(paragraph: Paragraph, suffix: str) -> None:
+    if suffix in paragraph_plain(paragraph):
+        return
+    if paragraph.runs:
+        last = paragraph.runs[-1]
+        last.text = (last.text or "") + suffix
+    else:
+        paragraph.add_run(suffix)
+
+
+def set_doc_title(doc: Document, title: str) -> None:
+    title = (title or "").strip()
+    if not title:
+        return
+    try:
+        doc.core_properties.title = title
+    except Exception:
+        pass
+
+
 def clear_highlight(run) -> None:
     rPr = run._element.find(qn("w:rPr"))
     if rPr is None:
@@ -134,16 +182,27 @@ def set_cell_text(cell, text: str) -> None:
 
 
 def replace_yellow_run_text(paragraph: Paragraph, new_text: str) -> bool:
-    """将段落中连续黄色高亮 runs 的文本替换为 new_text（合并到第一个黄 run）。"""
+    """替换黄色产品名/年份；说明书、风险揭示书、年即使是黄亮也保留。"""
     yellow_runs = [r for r in paragraph.runs if is_yellow(r)]
     if not yellow_runs:
         return False
-    # 若存在多段黄色（如封面产品名与年份在不同段），调用方按段处理
-    # 这里把「连续黄色块」逐块替换为同一 new_text 不适用；改为：整段内所有黄色拼成一块后整体替换
-    # 更稳妥：找到第一个黄 run，写入全文，其余黄 run 清空
-    yellow_runs[0].text = new_text
-    for r in yellow_runs[1:]:
+    prod_runs = [r for r in yellow_runs if (r.text or "").strip() not in TITLE_KEEP]
+    if not prod_runs:
+        first = yellow_runs[0]
+        first.text = new_text + (first.text or "")
+        return True
+    first = prod_runs[0]
+    raw = first.text or ""
+    embedded = ""
+    for suffix in TITLE_SUFFIXES:
+        if raw.endswith(suffix) and raw.strip() != suffix:
+            embedded = suffix
+            break
+    first.text = new_text
+    for r in prod_runs[1:]:
         r.text = ""
+    if embedded and embedded not in paragraph_plain(paragraph):
+        first.text = new_text + embedded
     return True
 
 
@@ -198,13 +257,18 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
     old_year = None
     cover_paras = table.rows[0].cells[0].paragraphs
     if cover_paras:
-        ys = yellow_texts(cover_paras[0])
-        if ys:
-            old_product = ys[0]
+        old_product = yellow_variable_text(cover_paras[0]) or None
+        if not old_product:
+            ys = yellow_texts(cover_paras[0])
+            if ys:
+                old_product = strip_title_suffix(ys[0]) or None
         if len(cover_paras) > 1:
-            ys2 = yellow_texts(cover_paras[1])
-            if ys2:
-                old_year = ys2[0]
+            old_year = yellow_variable_text(cover_paras[1]) or None
+            if not old_year:
+                ys2 = yellow_texts(cover_paras[1])
+                if ys2:
+                    y = ys2[0]
+                    old_year = y[:-1] if y.endswith("年") and y != "年" else y
 
     report: list[str] = []
     filled_labels: list[str] = []
@@ -221,7 +285,10 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
                 if paras and yellow_texts(paras[0]) is not None:
                     if yellow_texts(paras[0]):
                         replace_yellow_run_text(paras[0], product)
-                        report.append(f"封面标题产品简称 → {product}")
+                    ensure_title_suffix(paras[0], "说明书")
+                    title = paragraph_plain(paras[0]).strip()
+                    set_doc_title(doc, title)
+                    report.append(f"封面标题 → {title}")
                 if year and len(paras) > 1 and yellow_texts(paras[1]):
                     replace_yellow_run_text(paras[1], year)
                     report.append(f"封面年份 → {year}")
@@ -324,13 +391,18 @@ def extract_to_yaml(template_path: Path, out_path: Path) -> None:
     year = ""
     cover = table.rows[0].cells[0].paragraphs
     if cover:
-        ys = yellow_texts(cover[0])
-        if ys:
-            product = ys[0]
+        product = yellow_variable_text(cover[0])
+        if not product:
+            ys = yellow_texts(cover[0])
+            if ys:
+                product = strip_title_suffix(ys[0])
         if len(cover) > 1:
-            ys2 = yellow_texts(cover[1])
-            if ys2:
-                year = ys2[0]
+            year = yellow_variable_text(cover[1])
+            if not year:
+                ys2 = yellow_texts(cover[1])
+                if ys2:
+                    y = ys2[0]
+                    year = y[:-1] if y.endswith("年") and y != "年" else y
 
     fields: dict[str, str] = {}
     for ri, row in enumerate(table.rows):
@@ -466,7 +538,11 @@ def main(argv: list[str] | None = None) -> int:
     out = args.output
     if out is None:
         DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        out = DEFAULT_OUTPUT_DIR / f"{product}集合资产管理计划说明书-自动生成.docx"
+        kind = "单一" if "单一" in str(args.template) or "单一" in product else "集合"
+        if product.endswith("资产管理计划"):
+            out = DEFAULT_OUTPUT_DIR / f"{product}说明书-自动生成.docx"
+        else:
+            out = DEFAULT_OUTPUT_DIR / f"{product}{kind}资产管理计划说明书-自动生成.docx"
     else:
         out.parent.mkdir(parents=True, exist_ok=True)
 

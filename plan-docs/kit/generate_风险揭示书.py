@@ -53,6 +53,84 @@ def yellow_texts(para: Paragraph) -> list[str]:
     return parts
 
 
+TITLE_KEEP = frozenset({"说明书", "风险揭示书", "年"})
+TITLE_SUFFIXES = ("风险揭示书", "说明书")
+
+
+def strip_title_suffix(text: str) -> str:
+    t = (text or "").strip()
+    for suffix in TITLE_SUFFIXES:
+        if t.endswith(suffix):
+            return t[: -len(suffix)].strip()
+    return t
+
+
+def paragraph_plain(para: Paragraph) -> str:
+    return "".join(r.text or "" for r in para.runs)
+
+
+def yellow_variable_text(para: Paragraph) -> str:
+    parts: list[str] = []
+    for run in para.runs:
+        if not is_yellow(run):
+            continue
+        t = run.text or ""
+        if t.strip() in TITLE_KEEP:
+            continue
+        parts.append(t)
+    return strip_title_suffix("".join(parts).strip())
+
+
+def ensure_title_suffix(paragraph: Paragraph, suffix: str) -> None:
+    if suffix in paragraph_plain(paragraph):
+        return
+    if paragraph.runs:
+        last = paragraph.runs[-1]
+        last.text = (last.text or "") + suffix
+    else:
+        paragraph.add_run(suffix)
+
+
+def set_doc_title(doc: Document, title: str) -> None:
+    title = (title or "").strip()
+    if not title:
+        return
+    try:
+        doc.core_properties.title = title
+    except Exception:
+        pass
+
+
+def is_cover_title_para(para: Paragraph) -> bool:
+    t = para.text or ""
+    return "资产管理计划" in t or "风险揭示书" in t
+
+
+def replace_yellow_run_text(paragraph: Paragraph, new_text: str) -> bool:
+    """替换黄色产品名；说明书、风险揭示书即使是黄亮也保留。"""
+    yellow_runs = [r for r in paragraph.runs if is_yellow(r)]
+    if not yellow_runs:
+        return False
+    prod_runs = [r for r in yellow_runs if (r.text or "").strip() not in TITLE_KEEP]
+    if not prod_runs:
+        first = yellow_runs[0]
+        first.text = new_text + (first.text or "")
+        return True
+    first = prod_runs[0]
+    raw = first.text or ""
+    embedded = ""
+    for suffix in TITLE_SUFFIXES:
+        if raw.endswith(suffix) and raw.strip() != suffix:
+            embedded = suffix
+            break
+    first.text = new_text
+    for r in prod_runs[1:]:
+        r.text = ""
+    if embedded and embedded not in paragraph_plain(paragraph):
+        first.text = new_text + embedded
+    return True
+
+
 def clear_highlight(run) -> None:
     rPr = run._element.find(qn("w:rPr"))
     if rPr is None:
@@ -344,11 +422,12 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
         ys = yellow_texts(p)
         if not ys:
             continue
-        if "资产管理计划" in p.text and not old_product:
-            old_product = ys[0]
-        if any("风险" in y for y in ys) and not old_risk:
+        if is_cover_title_para(p) and not old_product:
+            old_product = yellow_variable_text(p) or strip_title_suffix(ys[0])
+            continue
+        if any("风险" in y and "揭示书" not in y for y in ys) and not old_risk:
             for y in ys:
-                if "风险" in y:
+                if "风险" in y and "揭示书" not in y:
                     old_risk = y
                     break
         if any("型" in y and ("C" in y or "普通投资者" in p.text) for y in ys) and not old_suit:
@@ -357,20 +436,22 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
                     old_suit = y
                     break
 
-    # 封面产品简称（黄亮）
+    # 封面：产品名 + 风险揭示书
     if product:
-        for p in doc.paragraphs[:5]:
-            ys = yellow_texts(p)
-            if ys and "资产管理计划" in p.text:
-                # 替换黄亮 runs
-                mapping = {ys[0]: product}
-                if old_product:
-                    mapping[old_product] = product
-                n = replace_yellow_chunks(p, mapping)
-                # 若黄亮已换但前后缀仍含旧名
+        for p in doc.paragraphs[:8]:
+            if not is_cover_title_para(p):
+                continue
+            if yellow_texts(p) or "风险揭示书" in p.text:
+                replace_yellow_run_text(p, product)
                 if old_product and old_product != product:
                     replace_in_runs(p, old_product, product)
-                report.append(f"封面产品简称 → {product}（黄亮替换 {n}）")
+                if not any("风险揭示书" in paragraph_plain(q) for q in doc.paragraphs[:8]):
+                    ensure_title_suffix(p, "风险揭示书")
+                title = paragraph_plain(p).strip()
+                if "风险揭示书" not in title:
+                    title = f"{title}风险揭示书"
+                set_doc_title(doc, title)
+                report.append(f"封面标题 → {title}")
                 break
 
     # 风险等级 / 适合投资者（黄亮段落）
@@ -480,11 +561,12 @@ def extract_to_yaml(template_path: Path, out_path: Path) -> None:
         ys = yellow_texts(p)
         if not ys:
             continue
-        if "资产管理计划" in p.text and not product:
-            product = ys[0]
+        if is_cover_title_para(p) and not product:
+            product = yellow_variable_text(p) or strip_title_suffix(ys[0])
+            continue
         if "投资品种" in p.text or "适合合格投资者" in p.text:
             for y in ys:
-                if "风险" in y and not risk:
+                if "风险" in y and "揭示书" not in y and not risk:
                     risk = y
                 if ("型" in y or "C" in y) and not suit:
                     suit = y
@@ -585,7 +667,11 @@ def main(argv: list[str] | None = None) -> int:
     out = args.output
     if out is None:
         DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        out = DEFAULT_OUTPUT_DIR / f"{product}集合资产管理计划风险揭示书-自动生成.docx"
+        kind = "单一" if "单一" in str(args.template) or "单一" in product else "集合"
+        if product.endswith("资产管理计划") or "说明书" in product:
+            out = DEFAULT_OUTPUT_DIR / f"{product}风险揭示书-自动生成.docx"
+        else:
+            out = DEFAULT_OUTPUT_DIR / f"{product}{kind}资产管理计划风险揭示书-自动生成.docx"
     else:
         out.parent.mkdir(parents=True, exist_ok=True)
 
