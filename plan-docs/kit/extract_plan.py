@@ -11,7 +11,7 @@ from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
-from contract_sections import extract_说明书_sections
+from contract_sections import extract_说明书_sections, load_paras
 from risk_sections import extract_风险揭示_sections
 
 PLACEHOLDER = "【未从合同抽到，请对照合同填写】"
@@ -58,6 +58,28 @@ SMS_KEYS = [
     "投资者权利与义务",
     "风险揭示",
     "利益冲突情况以及可能影响投资者合法权益的其他重要事项",
+]
+
+SINGLE_KEYS = [
+    "名称",
+    "产品类型",
+    "管理期限",
+    "投资范围",
+    "投资策略",
+    "投资限制和投资禁止",
+    "投资风险揭示",
+    "管理人概况",
+    "托管人概况",
+    "销售机构",
+    "聘用投资顾问情况",
+    "收益分配和风险承担",
+    "费用种类",
+    "业绩报酬",
+    "认购费、参与费、退出费",
+    "投资者的重要权利和义务",
+    "募集期间",
+    "信息披露的内容、方式和频率",
+    "其他事项（利益冲突情况及其他重要事项）",
 ]
 
 
@@ -738,18 +760,60 @@ def build_payload(contract_path: Path | str, year: int = 2026) -> dict:
     return {"sms": data, "risk": risk, "missing": missing, "notes": notes}
 
 
-def write_pair(contract_path, sms_template, risk_template, out_sms, out_risk, year: int = 2026) -> str:
+def guess_kind(contract_path) -> str:
+    head = "\n".join(load_paras(contract_path)[:60])
+    if "单一资产管理计划" in head and "集合资产管理计划" not in head[:2000]:
+        return "单一"
+    return "集合"
+
+
+def build_payload_single(contract_path, year: int = 2026) -> dict:
+    from extract_单一 import extract_单一
+
+    data = extract_单一(contract_path)
+    fields = dict(data.get("字段") or {})
+    missing = []
+    for key in SINGLE_KEYS:
+        if not str(fields.get(key) or "").strip():
+            fields[key] = PLACEHOLDER
+            missing.append(key)
+    name = str(data.get("产品简称") or fields.get("名称") or "").strip()
+    sms = {"产品简称": name, "年份": data.get("年份") or _year_cn(year), "字段": fields}
+    risk_level = str(data.get("风险等级") or "").strip()
+    suit = str(data.get("适合投资者") or "").strip()
+    risk = {
+        "产品简称": name,
+        "风险等级": risk_level or PLACEHOLDER,
+        "适合投资者": suit or PLACEHOLDER,
+        "合同引用": {},
+        "特殊风险揭示": data.get("特殊风险揭示") or "",
+        "一般风险揭示": data.get("一般风险揭示") or "",
+    }
+    if risk["风险等级"] == PLACEHOLDER:
+        missing.append("风险等级")
+    if risk["适合投资者"] == PLACEHOLDER:
+        missing.append("适合投资者")
+    return {"sms": sms, "risk": risk, "missing": missing, "notes": ["已按单一计划 22 行表填写。"]}
+
+
+def write_pair(contract_path, sms_template, risk_template, out_sms, out_risk, year: int = 2026, kind: str = "auto") -> str:
     from generate_说明书 import fill_document as fill_sms
     from generate_风险揭示书 import fill_document as fill_risk
 
-    payload = build_payload(contract_path, year=year)
+    resolved = (kind or "auto").strip()
+    if resolved == "auto":
+        resolved = guess_kind(contract_path)
+    if resolved == "单一":
+        payload = build_payload_single(contract_path, year=year)
+    else:
+        payload = build_payload(contract_path, year=year)
     sms_doc = Document(str(sms_template))
     fill_sms(sms_doc, payload["sms"])
     sms_doc.save(str(out_sms))
     risk_doc = Document(str(risk_template))
     fill_risk(risk_doc, payload["risk"])
     risk_doc.save(str(out_risk))
-    return summarize(payload)
+    return f"类型：{resolved}\n" + summarize(payload)
 
 
 def summarize(payload: dict) -> str:

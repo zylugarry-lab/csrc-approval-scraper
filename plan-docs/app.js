@@ -1,5 +1,6 @@
 const KIT_FILES = [
   "extract_plan.py",
+  "extract_单一.py",
   "generate_说明书.py",
   "generate_风险揭示书.py",
   "contract_sections.py",
@@ -125,10 +126,16 @@ await micropip.install("emfs:/python_docx-1.1.2-py3-none-any.whl", deps=False)
       if (!response.ok) throw new Error("缺少程序文件 " + name);
       engine.FS.writeFile("/kit/" + name, await response.text());
     }
-    const smsTpl = new Uint8Array(await (await fetch("template/sms-template.docx")).arrayBuffer());
-    const riskTpl = new Uint8Array(await (await fetch("template/risk-template.docx")).arrayBuffer());
-    engine.FS.writeFile("/template/sms-template.docx", smsTpl);
-    engine.FS.writeFile("/template/risk-template.docx", riskTpl);
+    const templates = [
+      ["sms-template.docx", "/template/sms-template.docx"],
+      ["risk-template.docx", "/template/risk-template.docx"],
+      ["sms-single.docx", "/template/sms-single.docx"],
+      ["risk-single.docx", "/template/risk-single.docx"],
+    ];
+    for (const [name, dest] of templates) {
+      const bytes = new Uint8Array(await (await fetch("template/" + name)).arrayBuffer());
+      engine.FS.writeFile(dest, bytes);
+    }
     engine.runPython(`
 import sys
 sys.path.insert(0, "/kit")
@@ -156,19 +163,31 @@ function downloadBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+function selectedKind() {
+  const el = document.querySelector('input[name="kind"]:checked');
+  return el ? el.value : "auto";
+}
+
 async function generateOne(engine, item) {
   const buf = new Uint8Array(await item.file.arrayBuffer());
   engine.FS.writeFile("/work/in.docx", buf);
+  const kind = selectedKind();
   const report = engine.runPython(`
-from extract_plan import write_pair
+from extract_plan import write_pair, guess_kind
+kind = ${JSON.stringify(kind)}
+if kind == "auto":
+    kind = guess_kind("/work/in.docx")
+sms = "/template/sms-single.docx" if kind == "单一" else "/template/sms-template.docx"
+risk = "/template/risk-single.docx" if kind == "单一" else "/template/risk-template.docx"
 try:
     text = write_pair(
         "/work/in.docx",
-        "/template/sms-template.docx",
-        "/template/risk-template.docx",
+        sms,
+        risk,
         "/work/sms.docx",
         "/work/risk.docx",
         year=2026,
+        kind=kind,
     )
     "OK\\n" + text
 except Exception as exc:

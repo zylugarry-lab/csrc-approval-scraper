@@ -344,7 +344,7 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
         ys = yellow_texts(p)
         if not ys:
             continue
-        if "集合资产管理计划" in p.text and not old_product:
+        if "资产管理计划" in p.text and not old_product:
             old_product = ys[0]
         if any("风险" in y for y in ys) and not old_risk:
             for y in ys:
@@ -361,7 +361,7 @@ def fill_document(doc: Document, data: dict, *, clear_marks: bool = True) -> lis
     if product:
         for p in doc.paragraphs[:5]:
             ys = yellow_texts(p)
-            if ys and "集合资产管理计划" in p.text:
+            if ys and "资产管理计划" in p.text:
                 # 替换黄亮 runs
                 mapping = {ys[0]: product}
                 if old_product:
@@ -480,7 +480,7 @@ def extract_to_yaml(template_path: Path, out_path: Path) -> None:
         ys = yellow_texts(p)
         if not ys:
             continue
-        if "集合资产管理计划" in p.text and not product:
+        if "资产管理计划" in p.text and not product:
             product = ys[0]
         if "投资品种" in p.text or "适合合格投资者" in p.text:
             for y in ys:
